@@ -40,9 +40,11 @@ def open_write(filepath: str, bytes: bool = False):
     make_dirs(filepath)
     return open(filepath, "w" + bytes * "b")
 
+
 def rm_file(filepath: str):
     if os.path.exists(filepath) and os.path.isfile(filepath):
         os.remove(filepath)
+
 
 def make_dirs(filepath: str):
     path = os.path.dirname(filepath)
@@ -59,5 +61,6 @@ def read_json(filepath: str):
 
 
 def write_json(filepath: str, content):
+    make_dirs(filepath)
     with open_write(filepath) as f:
         json.dump(content, f)
