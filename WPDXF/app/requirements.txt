@@ -1,0 +1,4 @@
+nltk==3.6.5
+pytest==6.2.4
+vertica_python==1.0.1
+warcio==1.6.3
