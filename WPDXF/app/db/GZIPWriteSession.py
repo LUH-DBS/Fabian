@@ -47,7 +47,7 @@ class GZIPWriteSession(DBSession):
                 (DEL.join([warc_id, str(pos), token]) + "\n").encode("utf-8")
             )
 
-        self.id_uri_mapping.write((DEL.join([warc_id, url])).encode("utf-8"))
+        self.id_uri_mapping.write((DEL.join([warc_id, url]) + "\n").encode("utf-8"))
 
     def afterInsert(self):
         path = join(Settings().TERM_STORE, self.archive_name)
