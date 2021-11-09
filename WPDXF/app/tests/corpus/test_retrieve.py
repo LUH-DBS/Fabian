@@ -3,45 +3,36 @@ from os.path import join
 import pytest
 from settings import Settings
 from stats import Statistics
-from tests.utils import (
-    clear_path,
-    createArcWarcRecord,
-    createWARC,
-    generate_scenario,
-    get_valid_warc,
-    get_valid_wet,
-)
-from utils import read_file, read_json, write_file
+from tests.utils import clear_path, createArcWarcRecord, createWARC, generate_scenario
+from utils import decompress_file, read_file, read_json, write_file
 
 from corpus.retrieval.wet.consume import wet_filter, yield_records
 from corpus.retrieval.wet.retrieve import main_routine, sample_tasks
 
 
 def test_wet_filter():
-    wet_args = get_valid_wet()
+    wet_args = generate_scenario({})
     input = createArcWarcRecord(**wet_args)
     target = True
 
     output = wet_filter(input)
     assert output == target
 
-    wet_args.update(record_type="request")
+    wet_args = generate_scenario({"record_type": "request"})
     input = createArcWarcRecord(**wet_args)
     target = False
 
     output = wet_filter(input)
     assert output == target
 
-    wet_args = get_valid_wet()
-    wet_args["warc_headers_dict"].update(
-        {"WARC-Identified-Content-Language": "eng, ger"}
-    )
+    wet_args = generate_scenario({"WARC-Identified-Content-Language": "eng, ger"})
     input = createArcWarcRecord(**wet_args)
     target = False
 
     output = wet_filter(input)
     assert output == target
 
+    wet_args = generate_scenario({})
     del wet_args["warc_headers_dict"]["WARC-Identified-Content-Language"]
     input = createArcWarcRecord(**wet_args)
     target = False
@@ -49,9 +40,7 @@ def test_wet_filter():
     output = wet_filter(input)
     assert output == target
 
-    wet_args["warc_headers_dict"].update(
-        {"WARC-Identified-Content-Language": "ger, eng"}
-    )
+    wet_args = generate_scenario({"WARC-Identified-Content-Language": "ger, eng"})
     input = createArcWarcRecord(**wet_args)
     target = False
 
@@ -90,7 +79,7 @@ def test_main_routine():
     clear_path(base_path)
     wets = generate_scenario(
         [
-            {},
+            {"payload": b"Some sample text.\nLet me see it in the term store."},
             {"WARC-Identified-Content-Language": "ger, eng"},
             {"WARC-Identified-Content-Language": "ger"},
             {"WARC-Identified-Content-Language": "eng"},
@@ -122,7 +111,38 @@ def test_main_routine():
     assert target_error == stats["dropped_error"]
     assert target_url_len == stats["max_url_len"]
     with pytest.raises(FileNotFoundError):
-        read_file(Settings().WET_PATHS + filename)
+        read_file(Settings().WET_FILES + filename)
+
+    target_terms = [
+        ["id0", "0", "sample"],
+        ["id0", "1", "text"],
+        ["id0", "2", "let"],
+        ["id0", "3", "see"],
+        ["id0", "4", "term"],
+        ["id0", "5", "store"],
+        ["id3", "0", "test"],
+    ]
+    output = list(
+        map(
+            lambda x: x.split(" "),
+            decompress_file(Settings().TERM_STORE + "main_routine.wet.gz").split("\n")[
+                :-1  # Drop last (empty) line
+            ],
+        )
+    )
+    assert target_terms == output
+
+    target_mapping = [["id0", "http://example.com"], ["id3", "http://example.com"]]
+
+    output = list(
+        map(
+            lambda x: x.split(" "),
+            decompress_file(Settings().MAP_STORE + "main_routine.wet.gz").split("\n")[
+                :-1  # Drop last (empty) line
+            ],
+        )
+    )
+    assert target_mapping == output
 
 
 def test_sample_tasks():

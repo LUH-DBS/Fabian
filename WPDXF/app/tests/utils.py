@@ -19,7 +19,6 @@ VALID_WARC_ARGS = {
     "record_type": "response",
     "warc_headers_dict": VALID_WARC_HEADERS,
     "payload": HTML_PAYLOAD,
-    "headers_list": [],
 }
 VALID_WET_HEADERS = {
     "WARC-Identified-Content-Language": "eng",
@@ -29,7 +28,7 @@ VALID_WET_ARGS = {
     "uri": "http://example.com",
     "record_type": "conversion",
     "warc_headers_dict": VALID_WET_HEADERS,
-    "payload": HTML_PAYLOAD,
+    "payload": TEXT_PAYLOAD,
     "headers_list": [],
 }
 
@@ -51,36 +50,38 @@ def get_valid_wet(record_id=None):
 
 
 def generate_scenario(configs):
-    wets = []
-    for id, conf in enumerate(configs):
+    def generate_record_conf(id, conf):
         wet = get_valid_wet(f"id{id}")
         for key, value in conf.items():
             if key in wet:
                 wet[key] = value
             elif key in wet["warc_headers_dict"]:
                 wet["warc_headers_dict"][key] = value
-        wets.append(wet)
+        return wet
+
+    if isinstance(configs, dict):
+        return generate_record_conf(0, configs)
+
+    wets = []
+    for id, conf in enumerate(configs):
+        wets.append(generate_record_conf(id, conf))
     return wets
 
 
 def createArcWarcRecord(writer=None, **kwargs):
-    def parse_kwargs(kwargs):
+    if "payload" in kwargs:
+        if not isinstance(kwargs["payload"], BytesIO):
+            kwargs["payload"] = BytesIO(kwargs["payload"])
+
+    if writer is None:
+        writer = BufferWARCWriter(gzip=True, warc_version="WARC/1.1")
         # HTTP HEADERS: Convert Headers list to StatusAndHeaders if given
         if "headers_list" in kwargs:
             kwargs["http_headers"] = StatusAndHeaders(
                 "200 OK", kwargs["headers_list"], protocol="HTTP/1.0"
             )
-            del kwargs["headers_list"]
 
-        if "payload" in kwargs:
-            if not isinstance(kwargs["payload"], BytesIO):
-                kwargs["payload"] = BytesIO(kwargs["payload"])
-        return kwargs
-
-    kwargs = parse_kwargs(kwargs)
-    if writer is None:
-        writer = BufferWARCWriter(gzip=True)
-        writer.warc_version = 'WARC/1.1'
+    del kwargs["headers_list"]
     return writer.create_warc_record(**kwargs)
 
 
@@ -90,7 +91,7 @@ def createWARC(filepath, recargs: Union[dict, list]):
         recargs = [recargs]
 
     with open_write(filepath, True) as fwarc:
-        writer = WARCWriter(fwarc, gzip=True, warc_version = 'WARC/1.1')
+        writer = WARCWriter(fwarc, gzip=True, warc_version="WARC/1.1")
 
         for kwargs in recargs:
             record = createArcWarcRecord(writer, **kwargs)
