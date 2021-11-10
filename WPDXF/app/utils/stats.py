@@ -1,7 +1,7 @@
 from os.path import join
 
-from settings import Settings
-from utils import read_json, write_json
+from utils.settings import Settings
+from utils.utils import read_json, write_json
 
 
 class Statistics:

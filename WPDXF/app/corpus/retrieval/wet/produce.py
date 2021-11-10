@@ -1,19 +1,29 @@
 import logging
-from os.path import basename
+from os import path
 from urllib.request import urlretrieve
 
-from settings import Settings
-from utils import make_dirs
+from utils.settings import Settings
+from utils.utils import make_dirs
 
 
-def retrieve(archive_part):
+def retrieve(archive_part: str) -> str:
+    """Downloads and writes the given archive.
+
+    Args:
+        archive_part (str): Archive part as it is in 'warc.paths'.
+
+    Returns:
+        str: Archive's filename
+    """
     s = Settings()
-    archive_name = basename(archive_part)
+    archive_name = path.basename(archive_part)
     wet_files = s.WET_FILES
 
     logging.info(f"Retrieve {archive_name}")
+
     make_dirs(wet_files)
-    urlretrieve(s.CC_DOMAIN + archive_part, wet_files + archive_name)
+    urlretrieve(s.CC_DOMAIN + archive_part, path.join(wet_files, archive_name))
+
     logging.info(f"Retrieve {archive_name}. Done.")
     return archive_name
 

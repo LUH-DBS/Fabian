@@ -1,6 +1,6 @@
 from os.path import join
 
-from utils import read_json
+from utils.utils import read_json
 
 DEFAULT_SETTINGS = "/home/fabian/Documents/Uni/Masterarbeit/Fabian/WPDXF/app/settings.json"
 

@@ -5,7 +5,7 @@ from typing import Union
 from warcio.statusandheaders import StatusAndHeaders
 from warcio.warcwriter import BufferWARCWriter, WARCWriter
 
-from utils import open_write
+from utils.utils import open_write
 
 HTML_PAYLOAD = b"<html><body>This is a test.<body/><html/>"
 TEXT_PAYLOAD = b"This is a test."

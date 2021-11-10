@@ -1,7 +1,7 @@
 from io import BytesIO
 
-from stats import Statistics
-from settings import Settings
+from utils.stats import Statistics
+from utils.settings import Settings
 
 from corpus.parsers.textparser import TextParser
 
@@ -57,7 +57,7 @@ def test_clean_and_token():
     tp = TextParser()
     assert list(tp.tokenize(input, ignore_stopwords=False)) == target
 
-    input = BytesIO(b"Test (alias Tset) [optional]\{curly brackets\} <end>")
+    input = BytesIO("Test (alias Tset) [optional]{curly brackets} <end>".encode("utf-8"))
     target = [
         ("test", 0),
         ("alias", 1),
@@ -85,7 +85,7 @@ def test_clean_and_token():
         ("included", 5),
         ("stopwords", 6),
     ]
-    target_efficiency = 7 / 19  # calculated per sentence
+    target_efficiency = 7 / 19
 
     tp = TextParser()
     assert list(tp.tokenize(input)) == target

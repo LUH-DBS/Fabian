@@ -2,7 +2,7 @@ import logging
 import os
 
 import pytest
-from settings import Settings
+from utils.settings import Settings
 
 TEST_SETTINGS = "/home/fabian/Documents/Uni/Masterarbeit/Fabian/WPDXF/app/test_settings.json"
 

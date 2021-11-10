@@ -1,17 +1,10 @@
 from nltk.corpus import stopwords
 from nltk.tokenize.nist import NISTTokenizer
-from settings import Settings
-from stats import Statistics
+from utils.settings import Settings
+from utils.stats import Statistics
 
-# nltk.download('stopwords', download_dir="/home/fabian/anaconda3/envs/ma/nltk_data")
-# Valid strings are either a single character or number or a string without separators,
-# that starts and ends with a character or a number.
-# PATTERN = compile(
-#     r"[\p{Latin}\p{N}][\p{Latin}\p{N}\p{P}]*[\p{Latin}\p{N}]|[\p{Latin}\p{N}]"
-# )
-# PATTERN = compile(
-#     r"[\p{Latin}\p{N}](?:[\p{Latin}\p{N}]|[^\P{P}\p{Ps}\p{Pe}])*[\p{Latin}\p{N}]|[\p{Latin}\p{N}]"
-# )
+# nltk.download('perluniprops')
+# nltk.download('stopwords')
 
 
 class TextParser:
@@ -22,12 +15,31 @@ class TextParser:
         self.max_token_len = Settings().MAX_TOKEN_LEN
 
     def tokenize(self, text_stream, ignore_stopwords: bool = True):
+        """This tokenizer is based on nltk.tokenize.nist.NISTTokenizer. 
+        It split a given text into lowercase tokens and removes all tokens that:
+        1) Do not contain any alpha-numeric (alnum) character (e.g.: punctuation, separators, ...)
+        2) Are included in the english nltk.stopwords
+        The tokens are enumerated afterwards.
+        Automatically updates the statistics regarding 'stopword efficiency'.
 
-        text = text_stream.read().decode("utf-8")
+        Note: 
+            Tokens that are longer than MAX_TOKEN_LEN are split into multiple tokens 
+            and treated as individual tokens.
+
+        Args:
+            text_stream (RawIOBase): A byte stream. It must be ensured that read() is implemented.
+            ignore_stopwords (bool, optional): Specify whether stopwords should be removed or not. 
+                Used for testing. Defaults to True.
+
+        Yields:
+            Tuple[str, int]: Token and its position in the tokenized text.
+        """
         counter = {
             "total_tok": 0,
             "nostopword_tok": 0,
-        }  # [ total_tokens, after_removed_stopwords ]
+        }  
+        # counter: [ tokens_in_total, tokens_after_stopword_removal ]
+        # tokens_in_total does not include non-alnum characters.
 
         def is_alnum_filter(token):
             for c in token:
@@ -45,7 +57,10 @@ class TextParser:
             counter["nostopword_tok"] += 1
             return True
 
+        text = text_stream.read().decode("utf-8")
         tokens = self.tokenizer.tokenize(text, lowercase=True)
+
+        # Iterate over all valid tokens
         token_idx = 0
         for token in filter(token_filter, tokens):
             while len(token) > 0:
@@ -54,6 +69,7 @@ class TextParser:
                 token = token[self.max_token_len :]
                 token_idx += 1
 
+        # Update statistics at the end
         if ignore_stopwords:
             Statistics().update_stopword_eff(
                 counter["total_tok"], counter["nostopword_tok"]
