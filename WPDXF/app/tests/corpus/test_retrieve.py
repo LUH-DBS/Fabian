@@ -170,7 +170,12 @@ def test_sample_tasks():
     assert output == target
 
     # Given files exceed limit
-    target = set()
+    target = []
     output = sample_tasks(limit=1, given_vals=set(wet_paths[1:]))
+    assert output == target
+
+    # Given files is exactly the limit
+    target = []
+    output = sample_tasks(limit=1, given_vals=set(wet_paths[0]))
     assert output == target
 

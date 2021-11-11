@@ -20,6 +20,7 @@ archive_part: The archive's partial location as it is in the 'wet.paths' file.
 archive_path: The archive's absolute filepath (usually ...data/corpus/wet/<archive_name>)
 """
 
+
 def main_routine(limit: int = None, mp_method: str = "spawn", **kwargs):
     """Main routine for corpus retrieval. 
        Initializes and manages workers, loads and distributes input values.
@@ -48,6 +49,10 @@ def main_routine(limit: int = None, mp_method: str = "spawn", **kwargs):
         downloaded = set()
         # Use this if some files were preloaded.
         downloaded = set(glob(settings.WET_FILES + "*.gz"))
+
+        processed = set()
+        processed = set(glob(settings.TERM_STORE + "*.gz"))
+
         for p in downloaded:
             queue_pipe.put(path.basename(p))
 
@@ -55,7 +60,7 @@ def main_routine(limit: int = None, mp_method: str = "spawn", **kwargs):
         consumer = start_processes(NUM_CONSUMER, "C{}", main_subroutine, queue_pipe)
 
         # Put new elements into queue_in until there are no further tasks to start.
-        for task in sample_tasks(limit=limit, given_vals=downloaded):
+        for task in sample_tasks(limit=limit, given_vals=downloaded | processed):
             queue_in.put(task)
 
         # Join and finish
@@ -170,7 +175,7 @@ def sample_tasks(limit: int = None, given_vals: set = None) -> set:
     Returns:
         set: A set of unique archive_parts.
     """
-    limit = limit or 0
+
     with open(Settings().WET_PATHS) as file:
         sample_from = set(file.read().split())
 
@@ -179,10 +184,8 @@ def sample_tasks(limit: int = None, given_vals: set = None) -> set:
         sample_from = set(
             filter(lambda x: path.basename(x) not in given_vals, sample_from)
         )
-        if limit > 0:
+        if limit is not None:
             limit -= len(given_vals)
-    if limit > 0:
-        return random.sample(sample_from, limit)
-    if limit < 0:
-        return set()
+    if limit is not None:
+        return random.sample(sample_from, max(limit, 0))
     return sample_from
