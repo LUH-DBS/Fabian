@@ -166,16 +166,5 @@ def test_sample_tasks():
 
     # Given files sampling
     target = set([wet_paths[0]])
-    output = sample_tasks(given_vals=set(map(lambda x: "pathb/" + x, wet_paths[1:])))
+    output = sample_tasks(exclude=set(map(lambda x: "pathb/" + x, wet_paths[1:])))
     assert output == target
-
-    # Given files exceed limit
-    target = []
-    output = sample_tasks(limit=1, given_vals=set(wet_paths[1:]))
-    assert output == target
-
-    # Given files is exactly the limit
-    target = []
-    output = sample_tasks(limit=1, given_vals=set(wet_paths[0]))
-    assert output == target
-

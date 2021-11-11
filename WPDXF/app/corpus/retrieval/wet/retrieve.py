@@ -60,7 +60,9 @@ def main_routine(limit: int = None, mp_method: str = "spawn", **kwargs):
         consumer = start_processes(NUM_CONSUMER, "C{}", main_subroutine, queue_pipe)
 
         # Put new elements into queue_in until there are no further tasks to start.
-        for task in sample_tasks(limit=limit, given_vals=downloaded | processed):
+        if limit is not None:
+            limit = max(limit - len(downloaded), 0)
+        for task in sample_tasks(limit=limit, exclude=downloaded | processed):
             queue_in.put(task)
 
         # Join and finish
@@ -160,16 +162,16 @@ def configure_worker(id: str):
     root.setLevel(logging.DEBUG)
 
 
-def sample_tasks(limit: int = None, given_vals: set = None) -> set:
+def sample_tasks(limit: int = None, exclude: set = None) -> set:
     """Collects and samples values from 'wet.paths' file. 
     If a limit is present, <limit> values are randomly sampled from 'wet.paths'.
-    If given_vals is present, this set is considered as given/truth. 
+    If exclude is present, this set is considered as given/truth. 
     These values will not be part of the set returned by the method.
 
     Args:
         limit (int, optional): The maximum of values returned. If less values exist, the limit must not be reached. Defaults to None.
-        given_vals (set, optional): A set of values that must be excluded from sampling. 
-            given_vals and 'wet.paths' are assumed to be sets of archive_name or archive_part values. 
+        exclude (set, optional): A set of values that must be excluded from sampling. 
+            exclude and 'wet.paths' are assumed to be sets of archive_name or archive_part values. 
             They are compared and excluded based on their os.path.basename. Defaults to None.
 
     Returns:
@@ -179,13 +181,11 @@ def sample_tasks(limit: int = None, given_vals: set = None) -> set:
     with open(Settings().WET_PATHS) as file:
         sample_from = set(file.read().split())
 
-    if given_vals is not None:
-        given_vals = set(map(path.basename, given_vals))
+    if exclude is not None:
+        exclude = set(map(path.basename, exclude))
         sample_from = set(
-            filter(lambda x: path.basename(x) not in given_vals, sample_from)
+            filter(lambda x: path.basename(x) not in exclude, sample_from)
         )
-        if limit is not None:
-            limit -= len(given_vals)
     if limit is not None:
-        return random.sample(sample_from, max(limit, 0))
+        return random.sample(sample_from, limit)
     return sample_from
