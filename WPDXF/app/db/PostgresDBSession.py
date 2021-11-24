@@ -58,7 +58,7 @@ class PostgresDBSession:
 
         for t in terms:
             mapping = path.join(Settings().MAP_STORE, path.basename(t))
-            self._copy_from(mapping, terms)
+            self._copy_from(mapping, t)
 
     def _copy_from(self, mapping, terms):
         mapping = f'zcat {mapping} | tr -d "\\0"'
