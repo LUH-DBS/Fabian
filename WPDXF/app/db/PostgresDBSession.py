@@ -6,7 +6,7 @@ import psycopg2
 from utils.settings import Settings
 from utils.utils import read_file
 
-VERTICA_CONFIG = Settings().VERTICA_CONFIG
+POSTGRES_CONFIG = Settings().POSTGRES_CONFIG
 DEL = " "
 
 
@@ -20,7 +20,7 @@ class PostgresDBSession:
     @property
     def connection(self):
         if self._connection is None:
-            self._connection = psycopg2.connect(**Settings().POSTGRES_CONFIG)
+            self._connection = psycopg2.connect(**POSTGRES_CONFIG)
         return self._connection
 
     def close(self, commit=True):
@@ -32,7 +32,7 @@ class PostgresDBSession:
 
     @staticmethod
     def probeConnection():
-        c = psycopg2.connect(**Settings().POSTGRES_CONFIG)
+        c = psycopg2.connect(**POSTGRES_CONFIG)
         c.close()
 
     def execute_from_file(self, filename):
@@ -47,9 +47,16 @@ class PostgresDBSession:
 
     def execute(self, operation, parameters=None, cursor=None):
         cursor = cursor or self.connection.cursor()
-        return cursor.execute(operation, parameters)
+        cursor.execute(operation, parameters)
+        return cursor
 
-    def copy_from(self, limit=0, offset=0):
+    def copy_from(self, limit=0, offset=0, *, type):
+        if type == 'single':    # Store data as a single Table
+            copy = self._copy_from_single
+        elif type == 'norm':    # Store data in a normalized form
+            copy = self._copy_from_norm
+        else:
+            return
         terms = sorted(glob(path.join(Settings().TERM_STORE, "*.wet.gz")))
         if offset >= len(terms):
             return []
@@ -58,9 +65,9 @@ class PostgresDBSession:
 
         for t in terms:
             mapping = path.join(Settings().MAP_STORE, path.basename(t))
-            self._copy_from(mapping, t)
+            copy(mapping, t)
 
-    def _copy_from(self, mapping, terms):
+    def _copy_from_single(self, mapping, terms):
         mapping = f'zcat {mapping} | tr -d "\\0"'
         terms = f'zcat {terms} | tr -d "\\0"'
         print(mapping)
@@ -77,6 +84,24 @@ class PostgresDBSession:
         )
         cursor.execute("DROP TABLE terms;")
         cursor.execute("DROP TABLE mapping;")
+        cursor.close()
+
+    def _copy_from_norm(self, mapping, terms):
+        mapping = f'zcat {mapping} | tr -d "\\0"'
+        terms = f'zcat {terms} | tr -d "\\0"'
+        print(mapping)
+        print(terms)
+        cursor = self.connection.cursor()
+        cursor.execute("CREATE TEMP TABLE mapping(warc CHAR(47), uri VARCHAR);")
+        cursor.execute(
+            "CREATE TEMP TABLE terms(warc CHAR(47), position INT, token VARCHAR(200));"
+        )
+        cursor.execute("COPY norm_uris(warc, uri) FROM PROGRAM %s DELIMITER ' '", (mapping,))
+        cursor.execute("COPY terms FROM PROGRAM %s DELIMITER ' '", (terms,))
+        cursor.execute(
+            "INSERT INTO norm_terms SELECT uriid, position, token FROM norm_uris JOIN terms USING (warc)"
+        )
+        cursor.execute("DROP TABLE terms;")
         cursor.close()
 
 
