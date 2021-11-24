@@ -4,6 +4,7 @@
     "STATISTICS_PATH": "statistics/",
     "WET_PATHS": "corpus/wet.paths",
     "WET_FILES": "corpus/wet/",
+    "WARC_FILES": "corpus/warc/",
     "STOP_WORDS": "corpus/stopwords.txt",
     "TERM_STORE": "store/terms/",
     "MAP_STORE": "store/mapping/",
@@ -20,6 +21,13 @@
     "log_level": 20,
     "autocommit": false,
     "use_prepared_statements": false
+  },
+  "POSTGRES_CONFIG": {
+    "host": "localhost",
+    "port": 2533,
+    "user": "postgres",
+    "password": "password",
+    "database": "wpdxf"
   },
   "NUM_PRODUCER": 2,
   "NUM_CONSUMER": 8,

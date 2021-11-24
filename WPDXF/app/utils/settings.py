@@ -2,7 +2,9 @@ from os.path import join
 
 from utils.utils import read_json
 
-DEFAULT_SETTINGS = "/home/fabian/Documents/Uni/Masterarbeit/Fabian/WPDXF/app/settings.json"
+DEFAULT_SETTINGS = (
+    "/home/fabian/Documents/Uni/Masterarbeit/Fabian/WPDXF/app/settings.json"
+)
 
 
 class Settings:
@@ -11,6 +13,7 @@ class Settings:
             "STATISTICS_PATH",
             "WET_PATHS",
             "WET_FILES",
+            "WARC_FILES",
             "STOP_WORDS",
             "TERM_STORE",
             "MAP_STORE",
@@ -23,6 +26,7 @@ class Settings:
             "BASE_PATH",
             "CC_DOMAIN",
             "VERTICA_CONFIG",
+            "POSTGRES_CONFIG",
             "NUM_PRODUCER",
             "NUM_CONSUMER",
             "UPDATE_STATS_EACH",
