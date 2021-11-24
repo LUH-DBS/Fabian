@@ -92,7 +92,6 @@ class PostgresDBSession:
         print(mapping)
         print(terms)
         cursor = self.connection.cursor()
-        cursor.execute("CREATE TEMP TABLE mapping(warc CHAR(47), uri VARCHAR);")
         cursor.execute(
             "CREATE TEMP TABLE terms(warc CHAR(47), position INT, token VARCHAR(200));"
         )
