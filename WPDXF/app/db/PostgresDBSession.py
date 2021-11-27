@@ -1,6 +1,9 @@
 import logging
+import random
 from glob import glob
 from os import path
+
+random.seed(0)
 
 import psycopg2
 from utils.settings import Settings
@@ -50,65 +53,87 @@ class PostgresDBSession:
         cursor.execute(operation, parameters)
         return cursor
 
-    def copy_from(self, limit=0, offset=0, *, type):
-        if type == 'single':    # Store data as a single Table
-            copy = self._copy_from_single
-        elif type == 'norm':    # Store data in a normalized form
-            copy = self._copy_from_norm
-        else:
-            return
+    def copy_from(self, limit=0, offset=0):
         terms = sorted(glob(path.join(Settings().TERM_STORE, "*.wet.gz")))
         if offset >= len(terms):
             return []
         u_idx = min(offset + limit, len(terms))
-        terms = terms[offset:u_idx]
+        self._copy_iter(terms[offset:u_idx])
 
+    def copy_from_sample(self, limit):
+        terms = sorted(glob(path.join(Settings().TERM_STORE, "*.wet.gz")))
+        self._copy_iter(random.sample(terms, k=limit))
+
+    def _copy_iter(self, terms):
         for t in terms:
-            mapping = path.join(Settings().MAP_STORE, path.basename(t))
-            copy(mapping, t)
+            bname = path.basename(t)
+            mapping = path.join(Settings().MAP_STORE, bname)
 
-    def _copy_from_single(self, mapping, terms):
+            logging.info(f"Started: Copy {bname} into Postgres DB.")
+            self._copy_from(mapping, t)
+            logging.info(f"Finished: Copy {bname} into Postgres DB.")
+
+    def _copy_from(self, mapping, terms):
         mapping = f'zcat {mapping} | tr -d "\\0"'
         terms = f'zcat {terms} | tr -d "\\0"'
-        print(mapping)
-        print(terms)
-        cursor = self.connection.cursor()
-        cursor.execute("CREATE TEMP TABLE mapping(warc CHAR(47), uri VARCHAR);")
-        cursor.execute(
-            "CREATE TEMP TABLE terms(warc CHAR(47), position INT, token VARCHAR(200));"
-        )
-        cursor.execute("COPY mapping FROM PROGRAM %s DELIMITER ' '", (mapping,))
-        cursor.execute("COPY terms FROM PROGRAM %s DELIMITER ' '", (terms,))
-        cursor.execute(
-            "INSERT INTO tok_terms SELECT uri, position, token FROM mapping JOIN terms USING (warc)"
-        )
-        cursor.execute("DROP TABLE terms;")
-        cursor.execute("DROP TABLE mapping;")
-        cursor.close()
 
-    def _copy_from_norm(self, mapping, terms):
-        mapping = f'zcat {mapping} | tr -d "\\0"'
-        terms = f'zcat {terms} | tr -d "\\0"'
-        print(mapping)
-        print(terms)
         cursor = self.connection.cursor()
         cursor.execute(
-            "CREATE TEMP TABLE terms(warc CHAR(47), position INT, token VARCHAR(200));"
+            "CREATE TABLE IF NOT EXISTS uris(uriid SERIAL PRIMARY KEY, uri VARCHAR)"
         )
-        cursor.execute("COPY norm_uris(warc, uri) FROM PROGRAM %s DELIMITER ' '", (mapping,))
-        cursor.execute("COPY terms FROM PROGRAM %s DELIMITER ' '", (terms,))
         cursor.execute(
-            "INSERT INTO norm_terms SELECT uriid, position, token FROM norm_uris JOIN terms USING (warc)"
+            "CREATE TABLE IF NOT EXISTS tokens(token VARCHAR(200) PRIMARY KEY, tokenid SERIAL)"
         )
-        cursor.execute("DROP TABLE terms;")
-        cursor.close()
+        cursor.execute(
+            "CREATE TABLE IF NOT EXISTS token_uri_mapping(uriid INT, position INT, tokenid INT);"
+        )
+
+        cursor.execute("DROP TABLE IF EXISTS cp_tokens;")
+        cursor.execute("DROP TABLE IF EXISTS cp_uris;")
+
+        cursor.execute(
+            "CREATE TEMP TABLE cp_tokens(warc CHAR(47), position INT, token VARCHAR(200));"
+        )
+        cursor.execute("CREATE TEMP TABLE cp_uris(warc CHAR(47), uri VARCHAR);")
+
+        cursor.execute("COPY cp_tokens FROM PROGRAM %s DELIMITER ' ';", (terms,))
+        cursor.execute("COPY cp_uris FROM PROGRAM %s DELIMITER ' ';", (mapping,))
+
+        cursor.execute(
+            "INSERT INTO tokens(token) SELECT DISTINCT token FROM cp_tokens ON CONFLICT DO NOTHING;"
+        )
+        cursor.execute(
+            """ WITH 
+                    this_uris(uriid, uri) AS
+                        (INSERT INTO uris(uri) SELECT uri FROM cp_uris RETURNING *)
+
+                INSERT INTO token_uri_mapping 
+                    SELECT uriid, position, tokenid 
+                    FROM this_uris 
+                        JOIN cp_uris USING(uri) 
+                        JOIN cp_tokens USING(warc) 
+                        JOIN tokens USING(token)
+            """
+        )
+        cursor.execute("DROP TABLE cp_tokens;")
+        cursor.execute("DROP TABLE cp_uris;")
 
 
 if __name__ == "__main__":
     c = PostgresDBSession()
-    # c.execute_from_file(
-    #     "/home/fabian/Documents/Uni/Masterarbeit/Fabian/WPDXF/res/vertica/designer_script.sql"
-    # )
-    c.copy_from(limit=5, offset=1)
+    terms = [
+        "/home/dbadmin/data/store/terms/CC-MAIN-20211023162040-20211023192040-00610.warc.wet.gz",
+        "/home/dbadmin/data/store/terms/CC-MAIN-20211025030510-20211025060510-00660.warc.wet.gz",
+        "/home/dbadmin/data/store/terms/CC-MAIN-20211025154225-20211025184225-00422.warc.wet.gz",
+        "/home/dbadmin/data/store/terms/CC-MAIN-20211026103840-20211026133840-00564.warc.wet.gz",
+    ]
+    mapping = [
+        "/home/dbadmin/data/store/mapping/CC-MAIN-20211023162040-20211023192040-00610.warc.wet.gz",
+        "/home/dbadmin/data/store/mapping/CC-MAIN-20211025030510-20211025060510-00660.warc.wet.gz",
+        "/home/dbadmin/data/store/mapping/CC-MAIN-20211025154225-20211025184225-00422.warc.wet.gz",
+        "/home/dbadmin/data/store/mapping/CC-MAIN-20211026103840-20211026133840-00564.warc.wet.gz",
+    ]
+    for t, m in zip(terms, mapping):
+        c._copy_from(m, t)
     # cur.close()
     c.close()
