@@ -1,34 +1,16 @@
 import io
 from os.path import join
 
-import vertica_python
 from corpus.parsers.textparser import TextParser
 from utils.settings import Settings
 from utils.stats import Statistics
-from utils.utils import compress_file, read_file
+from utils.utils import compress_file, decompress_file
 from warcio.recordloader import ArcWarcRecord
-
-from db.DBSession import DBSession
 
 DEL = " "
 
-# def create_tables():
-#     stmt = read_file(Settings().BASE_PATH + "vertica/create_tables.sql")
-#     with vertica_python.connect(**Settings().VERTICA_CONFIG) as c:
-#         cursor = c.cursor()
-#         cursor.execute(stmt)
-#         cursor.close()
 
-
-# def drop_tables():
-#     with vertica_python.connect(**Settings().VERTICA_CONFIG) as c:
-#         cursor = c.cursor()
-#         cursor.execute("DROP TABLE Documents CASCADE")
-#         cursor.execute("DROP TABLE Terms CASCADE")
-#         cursor.close()
-
-
-class GZIPTokenWriter(DBSession):
+class GZIPTokenWriter:
     """Tokenizes the WET-Record payload into the following delimiter-separated formats:
         (multiple) terms: warc_id{DEL}pos{DEL}token\\n
         (single) mapping: warc_id{DEL}url\\n
@@ -62,6 +44,9 @@ class GZIPTokenWriter(DBSession):
         tokens = TextParser().tokenize(wet.content_stream(),)
 
         for token, pos in tokens:
+            # drop0x00 is inserted for compatibility with postgresql.
+            # Data retrieved before fix was cleaned with drop0x00 afterwards.
+            token = self.drop0x00(token)
             self.terms.write(
                 (DEL.join([warc_id, str(pos), token]) + "\n").encode("utf-8")
             )
@@ -89,3 +74,17 @@ class GZIPTokenWriter(DBSession):
 
         self.terms = io.BytesIO()
         self.id_uri_mapping = io.BytesIO()
+
+    @staticmethod
+    def drop0x00(text: str) -> str:
+        """Used for compatibility with postgresql. 
+        COPY FROM raises an encoding error when 0x00 occurs in the data.
+        As 0x00 does not provide relevant information, it is dropped from tokens.
+
+        Args:
+            text (str): 'utf-8' encoded text that might include '0x00' as a character
+
+        Returns:
+            str: Clean text without '0x00'.
+        """
+        return text.replace("\x00", "")

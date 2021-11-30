@@ -16,7 +16,7 @@ TERMINATE = "\0"
 """
 Terminology:
 archive_name: The archive's filename without any path specification.
-archive_part: The archive's partial location as it is in the 'wet.paths' file.
+archive_part: The archive's partial location as it is used in the 'wet.paths' file.
 archive_path: The archive's absolute filepath (usually ...data/corpus/wet/<archive_name>)
 """
 
@@ -43,8 +43,8 @@ def main_routine(limit: int = None, mp_method: str = "spawn", **kwargs):
         manager = mp.Manager()
         # queue_in: 'wet.paths' -> retrieve (produce)
         queue_in = manager.Queue(NUM_PRODUCER)
-        # queue_pipe: retrieve -> main_subroutine (consume)
-        queue_pipe = manager.Queue()
+        # queue_pipe: retrieve -> main_subroutine (consume_0)
+        queue_pipe0 = manager.Queue(NUM_CONSUMER)
 
         downloaded = set()
         # Use this if some files were preloaded.
@@ -54,10 +54,10 @@ def main_routine(limit: int = None, mp_method: str = "spawn", **kwargs):
         processed = set(glob(settings.TERM_STORE + "*.gz"))
 
         for p in downloaded:
-            queue_pipe.put(path.basename(p))
+            queue_pipe0.put(path.basename(p))
 
-        producer = start_processes(NUM_PRODUCER, "P{}", retrieve, queue_in, queue_pipe)
-        consumer = start_processes(NUM_CONSUMER, "C{}", main_subroutine, queue_pipe)
+        producer = start_processes(NUM_PRODUCER, "P{}", retrieve, queue_in, queue_pipe0)
+        consumer_0 = start_processes(NUM_CONSUMER, "C{}", main_subroutine, queue_pipe0)
 
         # Put new elements into queue_in until there are no further tasks to start.
         if limit is not None:
@@ -68,8 +68,8 @@ def main_routine(limit: int = None, mp_method: str = "spawn", **kwargs):
         # Join and finish
         [queue_in.put(TERMINATE) for _ in range(NUM_PRODUCER)]
         [p.join() for p in producer]
-        [queue_pipe.put(TERMINATE) for _ in range(NUM_CONSUMER)]
-        [p.join() for p in consumer]
+        [queue_pipe0.put(TERMINATE) for _ in range(NUM_CONSUMER)]
+        [p.join() for p in consumer_0]
 
     else:
         for task in sample_tasks(limit=limit):

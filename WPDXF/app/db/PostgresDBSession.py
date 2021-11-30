@@ -118,22 +118,14 @@ class PostgresDBSession:
         cursor.execute("DROP TABLE cp_tokens;")
         cursor.execute("DROP TABLE cp_uris;")
 
+    def delete_entries_for_uri(self, uri):
+        cursor = self.connection.cursor()
+        cursor.execute("DELETE FROM uris WHERE uri = %s RETURNING uriid", (uri,))
+        # As uri is unique, this for-loop should iterate over a single uriid.
+        for uriid in cursor.fetchall():
+            cursor.execute("DELETE FROM token_uri_mapping WHERE uriid = %s", uriid)
+        cursor.close()
+
 
 if __name__ == "__main__":
-    c = PostgresDBSession()
-    terms = [
-        "/home/dbadmin/data/store/terms/CC-MAIN-20211023162040-20211023192040-00610.warc.wet.gz",
-        "/home/dbadmin/data/store/terms/CC-MAIN-20211025030510-20211025060510-00660.warc.wet.gz",
-        "/home/dbadmin/data/store/terms/CC-MAIN-20211025154225-20211025184225-00422.warc.wet.gz",
-        "/home/dbadmin/data/store/terms/CC-MAIN-20211026103840-20211026133840-00564.warc.wet.gz",
-    ]
-    mapping = [
-        "/home/dbadmin/data/store/mapping/CC-MAIN-20211023162040-20211023192040-00610.warc.wet.gz",
-        "/home/dbadmin/data/store/mapping/CC-MAIN-20211025030510-20211025060510-00660.warc.wet.gz",
-        "/home/dbadmin/data/store/mapping/CC-MAIN-20211025154225-20211025184225-00422.warc.wet.gz",
-        "/home/dbadmin/data/store/mapping/CC-MAIN-20211026103840-20211026133840-00564.warc.wet.gz",
-    ]
-    for t, m in zip(terms, mapping):
-        c._copy_from(m, t)
-    # cur.close()
-    c.close()
+    ...

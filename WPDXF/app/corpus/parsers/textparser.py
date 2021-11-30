@@ -14,6 +14,13 @@ class TextParser:
         self.tokenizer = NISTTokenizer()
         self.max_token_len = Settings().MAX_TOKEN_LEN
 
+    @staticmethod
+    def is_alnum_filter(token):
+        for c in token:
+            if c.isalnum():
+                return True
+        return False
+
     def tokenize(self, text_stream, ignore_stopwords: bool = True):
         """This tokenizer is based on nltk.tokenize.nist.NISTTokenizer. 
         It split a given text into lowercase tokens and removes all tokens that:
@@ -37,18 +44,12 @@ class TextParser:
         counter = {
             "total_tok": 0,
             "nostopword_tok": 0,
-        }  
+        }
         # counter: [ tokens_in_total, tokens_after_stopword_removal ]
         # tokens_in_total does not include non-alnum characters.
 
-        def is_alnum_filter(token):
-            for c in token:
-                if c.isalnum():
-                    return True
-            return False
-
         def token_filter(token):
-            if not is_alnum_filter(token):
+            if not self.is_alnum_filter(token):
                 return False
             if ignore_stopwords:
                 counter["total_tok"] += 1
@@ -74,3 +75,24 @@ class TextParser:
             Statistics().update_stopword_eff(
                 counter["total_tok"], counter["nostopword_tok"]
             )
+
+    def tokenize_str(self, text_str:str, ignore_stopwords=True):
+        def token_filter(token):
+            if not self.is_alnum_filter(token):
+                return False
+            if ignore_stopwords:
+                if token in self.stopwords:
+                    return False
+            return True
+
+        tokens = self.tokenizer.tokenize(text_str, lowercase=True)
+        result = []
+        # Iterate over all valid tokens
+        token_idx = 0
+        for token in filter(token_filter, tokens):
+            while len(token) > 0:
+                result.append((token[: self.max_token_len], token_idx))
+
+                token = token[self.max_token_len :]
+                token_idx += 1
+        return result
