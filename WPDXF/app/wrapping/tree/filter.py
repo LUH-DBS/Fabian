@@ -10,11 +10,11 @@ class TauMatchFilter:
             return False
         if node.children:
             for c in node.children.values():
-                if len(c.ex_matches) < self.tau:
-                    return True
-        else:
-            return True
-        return False
+                if c.ex_matches == node.ex_matches:
+                    return False
+                # if len(c.ex_matches) < self.tau:
+                #     return True
+        return True
 
     def filter(self, ex_matches: set, q_matches: set) -> bool:
         return len(ex_matches) >= self.tau
