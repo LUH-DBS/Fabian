@@ -24,11 +24,6 @@
       "uri": "https://www.thetimes.co.uk/article/james-milners-hamstring-injury-stirs-fury-over-dangerous-workload-8mwl5zr68"
     },
     {
-      "input": "Dead and reburied",
-      "output": null,
-      "uri": "https://www.thetimes.co.uk/article/dead-and-reburied-kfsjbscwv8c"
-    },
-    {
       "input": "Bunker error costs Miguel Angel Jimenez course record at Royal Porthcawl",
       "output": "Rob Cole",
       "uri": "https://www.thetimes.co.uk/article/bunker-error-costs-miguel-angel-jimenez-course-record-at-royal-porthcawl-bqfhq788g"
@@ -49,19 +44,9 @@
       "uri": "https://www.thetimes.co.uk/article/legal-amp-general-sees-growing-appeal-of-family-homes-to-rent-lxjc5prb9"
     },
     {
-      "input": "Something to shout about",
-      "output": null,
-      "uri": "https://www.thetimes.co.uk/article/something-to-shout-about-jppcxbs6x2g"
-    },
-    {
       "input": "Gangs know they can hack and slash and get away with it in London war zone",
       "output": "Martin Fletcher",
       "uri": "https://www.thetimes.co.uk/article/gangs-know-they-can-hack-and-slash-and-get-away-with-it-in-london-war-zone-5hzf082td"
-    },
-    {
-      "input": "Service appointments: Navy",
-      "output": null,
-      "uri": "https://www.thetimes.co.uk/article/service-appointments-navy-qsc3l6bmsq3"
     },
     {
       "input": "Caf\u00e9 society in Edinburgh is promised a cannabis alternative",

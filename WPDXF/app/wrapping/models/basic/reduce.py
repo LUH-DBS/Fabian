@@ -1,14 +1,12 @@
-from collections import defaultdict
-from typing import List, Tuple, Union
+from typing import List
 
 import numpy as np
+from wrapping.objects.pairs import Example
 from wrapping.objects.resource import Resource
 
 
 class BasicReducer:
-    def reduce(
-        self, resource: Resource, examples: List[Tuple[str, Union[str, None]]] = None
-    ):
+    def reduce(self, resource: Resource, examples: List[Example] = None):
         for wp in resource.webpages:
             done = False
             while not done:
@@ -29,7 +27,9 @@ class BasicReducer:
 
                     w_vals = [
                         (
-                            np.mean([val.diff(r) for r in others]) if others else 0,
+                            np.mean([abs(len(val.path) - len(r.path)) for r in others])
+                            if others
+                            else 0,
                             key,
                             val,
                         )
@@ -60,7 +60,9 @@ class BasicReducer:
                 ]
                 w_vals = [
                     (
-                        np.mean([val.diff(r) for r, _ in others]) if others else 0,
+                        np.mean([abs(len(val.path) - len(r.path)) for r,_ in others])
+                        if others
+                        else 0,
                         wp,
                         key,
                         val,

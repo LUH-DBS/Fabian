@@ -17,17 +17,32 @@ class Resource:
     def remove_webpage(self, wp):
         self.webpages.remove(wp)
 
-    @property
-    def out_matches(self) -> dict:
-        matches = defaultdict(list)
-        for wp in self.webpages:
-            for key, vals in wp.out_matches.items():
-                matches[key].extend([(v, wp) for v in vals])
-        return dict(matches)
+    def output_matches(self, key=None, select="true"):
+        if key is None:
+            matches = defaultdict(list)
+            for wp in self.webpages:
+                for k, vals in wp.output_matches(key, select).items():
+                    matches[k].extend(vals)
+            return dict(matches)
 
-    @property
-    def inp_matches(self) -> dict:
-        matches = defaultdict(list)
-        for wp in self.webpages:
-            for key, vals in wp.inp_matches.items():
-                matches[key].extend([(v, wp) for v in vals])
+        return [
+            (val, wp) for wp in self.webpages for val in wp.output_matches(key, select)
+        ]
+
+    def relative_xpaths(self, key=None, select="true"):
+        if key is None:
+            matches = defaultdict(list)
+            for wp in self.webpages:
+                for k, vals in wp.relative_xpaths(key, select).items():
+                    matches[k].extend((v, wp) for v in vals)
+            return dict(matches)
+
+        return [
+            (val, wp) for wp in self.webpages for val in wp.relative_xpaths(key, select)
+        ]
+
+    def matched_examples(self):
+        return set.union(*[set(wp.matches["true"]) for wp in self.webpages])
+
+    def matched_queries(self):
+        return set.union(*[set(wp.q_matches) for wp in self.webpages])
