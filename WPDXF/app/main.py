@@ -15,7 +15,7 @@ def main():
     args = parser.parse_args()
 
     resource_filter = TauMatchFilter(2)
-    evaluator = BasicEvaluator(resource_filter)
+    evaluator = BasicEvaluator()
     reducer = BasicReducer()
     reducer = NielandtReducer()
     induction = BasicInduction()

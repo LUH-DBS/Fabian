@@ -1,6 +1,7 @@
+from io import StringIO
+
 from corpus.retrieval.warc.warcrecord import get_html
 from wrapping.objects.xpath.path import RelativeXPath
-from copy import deepcopy
 
 
 class WebPage:

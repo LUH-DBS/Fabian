@@ -2,18 +2,15 @@ from collections import UserList
 from copy import deepcopy
 from typing import List, Union
 
-from lxml.etree import ElementBase
+from lxml.etree import _Element
 from wrapping.objects.xpath.node import XPathNode
 from wrapping.objects.xpath.predicate import Predicate
 
 
-def node_list(tail: ElementBase) -> List[ElementBase]:
-    while not isinstance(tail, ElementBase):
-        tail = tail.getparent()
+def node_list(tail: _Element) -> List[_Element]:
     result = []
     element = tail
     while True:
-        # if isinstance(element, ElementBase):
         result.insert(0, element)
         element = element.getparent()
         if element is None:
@@ -35,9 +32,9 @@ class RelativeXPath:
     def __init__(
         self,
         start_path: Union[List[XPathNode], XPath],
-        start_node: ElementBase = None,
+        start_node: _Element = None,
         end_path: Union[List[XPathNode], XPath] = None,
-        end_node: ElementBase = None,
+        end_node: _Element = None,
         common_path: Union[List[XPathNode], XPath] = None,
     ) -> None:
         self.start_node = start_node
@@ -54,7 +51,7 @@ class RelativeXPath:
         self.end_path = XPath(end_path or [XPathNode(axisname="self")])
 
     @staticmethod
-    def new_instance(start: ElementBase, end: ElementBase):
+    def new_instance(start: _Element, end: _Element):
         start_path = [XPathNode(axisname="self")]
         end_path = []
         root_element = end

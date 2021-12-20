@@ -15,7 +15,8 @@ def wrap(
 ):
     queries_original = queries
     examples = [Example(i, *vals) for i, vals in enumerate(examples)]
-    queries = [Query(i, *vals) for i, vals in enumerate(queries)]
+    off = len(examples)
+    queries = [Query(i + off, *vals) for i, vals in enumerate(queries)]
     print("Retrieve web pages (candidates)...")
     candidates = candidates or get_uris_for(examples, queries)
 
@@ -38,7 +39,10 @@ def wrap(
             break
         for resource in resource_groups:
             resource = Resource(*resource)
-            if not evaluator.eval_initial(resource, examples, queries, i):
+            evaluator.eval_initial(resource, examples, queries, i)
+            if not resource_filter.filter(
+                resource.matched_examples(), resource.matched_queries()
+            ):
                 print("Resource dropped due to bad initialization")
                 continue
             else:
@@ -49,7 +53,9 @@ def wrap(
                 has_output = True
                 reducer.reduce(resource)
                 print(resource.matched_examples(), resource.matched_queries())
-                if not resource_filter.filter(resource.matched_examples(), resource.matched_queries()):
+                if not resource_filter.filter(
+                    resource.matched_examples(), resource.matched_queries()
+                ):
                     continue
 
                 induction.induce(resource, examples)
@@ -63,13 +69,13 @@ def wrap(
                 overfull_cnt = len(query_results)
                 empty_cnt = len(query_results)
                 print(q_dict)
-                for key, vals in q_dict.items():
+                for q, vals in q_dict.items():
                     if len(vals) >= 1:
                         empty_cnt -= 1
                     if len(vals) <= 1:
                         overfull_cnt -= 1
                     if len(vals) == 1:
-                        query_results[queries[key].inp] = vals[0]
+                        query_results[q.inp] = vals[0]
                 print(resource.out_xpath.as_xpath(abs_start_path="$input"))
                 if overfull_cnt > 2:
                     print("OVERFULL")
@@ -82,7 +88,9 @@ def wrap(
                 wrap_result.append(
                     {
                         "resourceID": resource.id,
-                        "rel_xpath": resource.out_xpath.as_xpath(abs_start_path="$input"),
+                        "rel_xpath": resource.out_xpath.as_xpath(
+                            abs_start_path="$input"
+                        ),
                         "mapping": query_results,
                     }
                 )
