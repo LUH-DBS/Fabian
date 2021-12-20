@@ -6,6 +6,14 @@ class TauMatchFilter:
         self.tau = tau
 
     def node_filter(self, node: URITree) -> bool:
+        """Evaluates to True when the node matches at least tau examples and there is no child that matches the same examples. False, otherwise.
+
+        Args:
+            node (URITree): Node to be evaluated.
+
+        Returns:
+            bool: True indicates that the node should be considered, False indicates that the node can be ignored.
+        """
         if not self.filter(node.ex_matches, node.q_matches):
             return False
         if node.children:
