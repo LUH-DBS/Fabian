@@ -1,9 +1,10 @@
 from typing import List
 
 from lxml.etree import ElementBase
-from wrapping.objects.xpath.node import XPathNode
+from wrapping.objects.xpath.node import AXISNAMES, XPathNode
 from wrapping.objects.xpath.path import RelativeXPath, XPath, node_list
-from wrapping.objects.xpath.predicate import Disjunction, Predicate
+from wrapping.objects.xpath.predicate import (AttributePredicate, Disjunction,
+                                              Predicate)
 
 
 def preprocess(xpath_g: XPath, xpaths: List[RelativeXPath], sn_func):
@@ -77,7 +78,7 @@ def _similar_attributes(step, indicated_nodes, overflow_nodes):
             similar_attributes.append((key, None))
 
     step.predicates.extend(
-        Predicate(left, right=right) for left, right in similar_attributes
+        AttributePredicate(left, right=right) for left, right in similar_attributes
     )
 
 
@@ -96,7 +97,7 @@ def _node_names(step, indicated_nodes, overflow_nodes):
 def _close_neighbours(indicated_nodes, overflow_nodes):
     def _collect(nodes, axisname):
         close_neighbours = None
-        basepath = XPath([XPathNode(axisname="self"), XPathNode(axisname="parent")])
+        basepath = XPath([XPathNode.new_self(), XPathNode(axisname=AXISNAMES.PAR)])
         query = str(basepath + XPathNode(axisname=axisname))
         for element in nodes:
             neighbours = element.xpath(query)
