@@ -3,32 +3,55 @@ from copy import deepcopy
 from typing import List, Union
 
 from lxml.etree import _Element
-from wrapping.objects.xpath.node import XPathNode
+from wrapping.objects.xpath.node import AXISNAMES, XPathNode
 from wrapping.objects.xpath.predicate import Predicate
 
 
 def node_list(tail: _Element) -> List[_Element]:
+    """Returns a list of all elements on the path between the root node and 'tail'.
+    Starting at the root itself.
+
+    Args:
+        tail (_Element): End of the path.
+
+    Returns:
+        List[_Element]: All elements on the path.
+    """
     result = []
     element = tail
-    while True:
-        result.insert(0, element)
+    while element is not None:
+        result += [element]
         element = element.getparent()
-        if element is None:
-            break
-    return result
+    return result[::-1]
 
 
 class XPath(UserList):
+    """A XPath wrapper with the ability to represent the underlying list of XPathNode as a valid XPath."""
+
     def __str__(self) -> str:
+        if not self:
+            return "/"
         old_len = -1
         repr = "/".join(map(str, self))
+        if not repr.startswith("."):
+            repr = "/" + repr
         while old_len != len(repr):
             old_len = len(repr)
             repr = repr.replace("///", "//")
+        if repr.endswith("/"):
+            repr += "descendant-or-self::node()"
         return repr
 
 
 class RelativeXPath:
+    """A relative XPath that returns end_nodes matching the described pattern, relative to the start node.
+    This wrapper describes relative XPaths without using 'parent'/ascending axes.
+        Described as follows:
+        xpath:= common_path/root[./start_path=abs_start_path]/end_path
+
+        Example: //div[./a/b=/div/a/b]/c/d <-> ./../../c/d (relative to start_node)
+    """
+
     def __init__(
         self,
         start_path: Union[List[XPathNode], XPath],
@@ -37,22 +60,41 @@ class RelativeXPath:
         end_node: _Element = None,
         common_path: Union[List[XPathNode], XPath] = None,
     ) -> None:
+        """[summary]
+
+        Args:
+            start_path (Union[List[XPathNode], XPath]): The relative_path from a last common root to the start_node.
+            start_node (_Element, optional): If the RelativeXPath belongs to a real example, the start_node can be initially passed. 
+            Otherwise it must be passed when the general RelativeXPath is applied to a real scenario. Defaults to None.
+            end_path (Union[List[XPathNode], XPath], optional): Can be set to None, when the common_root equals the end_node. 
+            It can be useful in some cases, but should be avoided in general! Defaults to ".".
+            end_node (_Element, optional): Similar to start_node, 
+            but the end_node is just stored for completeness and has no relevance for the actual RelativeXPath. Defaults to None.
+            common_path (Union[List[XPathNode], XPath], optional): The common_path shared by the abs_start_path and the abs_end_path. Defaults to "//*".
+        """
         self.start_node = start_node
         self.end_node = end_node
 
         self.common_path = XPath(
             common_path
-            or [
-                XPathNode(axisname="descendant-or-self"),
-                XPathNode(axisname="descendant-or-self"),
-            ]
+            or [XPathNode(axisname=AXISNAMES.DEOS), XPathNode(axisname=AXISNAMES.DEOS),]
         )
         self.start_path = XPath(start_path)
-        self.end_path = XPath(end_path or [XPathNode(axisname="self")])
+        self.end_path = XPath(end_path or [XPathNode.new_self()])
 
     @staticmethod
-    def new_instance(start: _Element, end: _Element):
-        start_path = [XPathNode(axisname="self")]
+    def new_instance(start: _Element, end: _Element, container: list = None):
+        """Creates a new RelativeXPath instance based on a start and an end element from the same tree.
+
+        Args:
+            start (_Element): start_node or RelativeXPath
+            end (_Element): end_node of RelativeXpath
+            container (list, optional): Used to bypass values without returning. Used for testing. Defaults to None.
+
+        Returns:
+            [type]: [description]
+        """
+        start_path = [XPathNode.new_self()]
         end_path = []
         root_element = end
         # If start and end are the same element, the relative XPath is trivial: "."
@@ -75,26 +117,10 @@ class RelativeXPath:
             end_path += XPath(map(XPathNode.new_instance, end_elements[idx - 1 :]))
 
         relativeXPath = RelativeXPath(start_path, start, end_path, end)
+        if container is not None:
+            container.append(root_element)
 
-        test = root_element.xpath(str(relativeXPath.start_path))
-        assert len(test) == 1 and (
-            test[0] == relativeXPath.start_node
-        ), f"{str(relativeXPath)}\n{start_path}"
-        test = root_element.xpath(str(relativeXPath.end_path[1:]))
-        assert (
-            len(test) == 1 and test[0] == relativeXPath.end_node
-        ), f"{str(relativeXPath)}\n{end_path}"
-        test = root_element.xpath(
-            str(relativeXPath.common_path + relativeXPath.end_path[:1])
-        )
-        assert (
-            root_element in test
-        ), f"{str(relativeXPath.common_path + relativeXPath.end_path[:1])}\n{relativeXPath.end_node.getroottree().getpath(relativeXPath.end_node)}\n{start_path}\n{end_path}\n{test}"
-        test = relativeXPath.end_node.xpath(str(relativeXPath))
-        assert (
-            len(test) == 1 and test[0] == relativeXPath.end_node
-        ), f"{str(relativeXPath)}\n{start_path}\n{end_path}\n{relativeXPath.end_node.getroottree().getpath(relativeXPath.end_node)}"
-
+        assert start.xpath(str(relativeXPath)) == [end]
         return relativeXPath
 
     def as_xpath(self, start_node=None, abs_start_path=None) -> str:
@@ -109,50 +135,9 @@ class RelativeXPath:
     def __str__(self) -> str:
         return self.as_xpath()
 
-    @property
-    def root(self) -> XPathNode:
-        """Returns the root node's XPathNode of the (smallest) subtree
-           that contains the start element and the end element.
+    # @property
+    # def xpath(self) -> XPath:
+    #     return self.common_path + self.end_path
 
-        Returns:
-            XPathNode: Subtree root.
-        """
-        return self.end_path[0]
-
-    @property
-    def xpath(self) -> XPath:
-        return self.common_path + self.end_path
-
-    def abs_start_path(self):
-        return self.start_node.getroottree().getpath(self.start_node)
-
-
-if __name__ == "__main__":
-    from lxml import etree, html
-
-    text = """
-    <html><body><div><a><val id="input">Input</val></a><div>Bla</div></div><div><val id="output">Output</val></div></body></html>
-    """
-
-    h = html.fromstring(text)
-    tree = etree.ElementTree(h)
-    e = tree.xpath("//val")
-    print(e)
-    r = RelativeXPath.new_instance(*e)
-    e = tree.xpath("//*[text()='Bla']")[0]
-    print(e)
-    r = RelativeXPath.new_instance(e, e)
-
-    text = "<a>Input</a><b>Output</b>"
-    h = html.fromstring(text)
-    tree = etree.ElementTree(h)
-    e = tree.xpath("//*[child::text()]")
-    print(e)
-    r = RelativeXPath.new_instance(*e)
-
-    text = "<a>Input<b>Output</b></a>"
-    h = html.fromstring(text)
-    tree = etree.ElementTree(h)
-    e = tree.xpath("//*[child::text()]")
-    print(e)
-    r = RelativeXPath.new_instance(*e)
+    # def abs_start_path(self):
+    #     return self.start_node.getroottree().getpath(self.start_node)
