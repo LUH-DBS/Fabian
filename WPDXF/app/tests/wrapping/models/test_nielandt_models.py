@@ -1,12 +1,15 @@
+from lxml.etree import fromstring
 from wrapping.models.basic.evaluate import BasicEvaluator
 from wrapping.models.nielandt.align import align
+from wrapping.models.nielandt.enrichment import preprocess
+from wrapping.models.nielandt.merge import merge
 from wrapping.models.nielandt.reduce import NielandtReducer
-from wrapping.models.nielandt.utils import backtrack, edit_distance
+from wrapping.models.nielandt.utils import edit_distance
 from wrapping.objects.pairs import Example
 from wrapping.objects.resource import Resource
 from wrapping.objects.webpage import WebPage
 from wrapping.objects.xpath.node import AXISNAMES, XPathNode
-from wrapping.objects.xpath.path import XPath
+from wrapping.objects.xpath.path import RelativeXPath, XPath
 from wrapping.objects.xpath.predicate import Conjunction, Predicate
 
 
@@ -95,10 +98,6 @@ def test_reduce():
     assert len(r.output_matches(0)) == 1
     assert len(r.output_matches(1)) == 1
     assert len(r.output_matches(2)) == 0
-
-
-def test_edit_distance():
-    ...
 
 
 def test_align():
@@ -247,7 +246,249 @@ def test_align():
         ]
     )
 
-    output = align([ex0, ex1, ex2])
-    assert any(str(out) == str(target_ex0) for out in output)
-    assert any(str(out) == str(target_ex1) for out in output)
-    assert any(str(out) == str(target_ex2) for out in output)
+    # Alignment
+    output = align([ex0, ex1, ex2])  # Output order can differ.
+    assert any(out == target_ex0 for out in output)
+    assert any(out == target_ex1 for out in output)
+    assert any(out == target_ex2 for out in output)
+
+    target = XPath(
+        [
+            XPathNode(axisname=AXISNAMES.DEOS),
+            XPathNode(nodetest="body"),
+            XPathNode(axisname=AXISNAMES.DEOS),
+            XPathNode(nodetest="table"),
+            XPathNode(axisname=AXISNAMES.DEOS),
+            XPathNode(nodetest="node()",),
+            XPathNode(axisname=AXISNAMES.DEOS),
+        ]
+    )
+    output = merge(output)
+    assert output == target
+
+
+def test_enrichment():
+    # Running example from "Predicate enrichment of aligned XPaths for wrapper induction", Nielandt et al. (2016)
+    input0 = XPath(
+        [
+            XPathNode(
+                nodetest="html",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(
+                nodetest="body",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(
+                nodetest="div",
+                predicates=Conjunction([Predicate("position()", right="2")]),
+            ),
+            XPathNode(
+                nodetest="div",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(
+                nodetest="table",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(
+                nodetest="tr",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(
+                nodetest="td",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+        ]
+    )
+    input1 = XPath(
+        [
+            XPathNode(
+                nodetest="html",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(
+                nodetest="body",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(
+                nodetest="div",
+                predicates=Conjunction([Predicate("position()", right="2")]),
+            ),
+            XPathNode(
+                nodetest="div",
+                predicates=Conjunction([Predicate("position()", right="2")]),
+            ),
+            XPathNode(
+                nodetest="table",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(
+                nodetest="tr",
+                predicates=Conjunction([Predicate("position()", right="3")]),
+            ),
+            XPathNode(
+                nodetest="td",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+        ]
+    )
+    input2 = XPath(
+        [
+            XPathNode(
+                nodetest="html",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(
+                nodetest="div",
+                predicates=Conjunction([Predicate("position()", right="2")]),
+            ),
+            XPathNode(
+                nodetest="div",
+                predicates=Conjunction([Predicate("position()", right="2")]),
+            ),
+            XPathNode(
+                nodetest="table",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(
+                nodetest="tr",
+                predicates=Conjunction([Predicate("position()", right="3")]),
+            ),
+            XPathNode(
+                nodetest="td",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+        ]
+    )
+
+    target0 = input0
+    target1 = input1
+    target2 = XPath(
+        [
+            XPathNode(
+                nodetest="html",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode.new_self(),
+            XPathNode(
+                nodetest="div",
+                predicates=Conjunction([Predicate("position()", right="2")]),
+            ),
+            XPathNode(
+                nodetest="div",
+                predicates=Conjunction([Predicate("position()", right="2")]),
+            ),
+            XPathNode(
+                nodetest="table",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(
+                nodetest="tr",
+                predicates=Conjunction([Predicate("position()", right="3")]),
+            ),
+            XPathNode(
+                nodetest="td",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+        ]
+    )
+    output = align([input0, input1, input2])  # Output order can differ.
+    assert any(out == target0 for out in output)
+    assert any(out == target1 for out in output)
+    assert any(out == target2 for out in output)
+
+    target = XPath(
+        [
+            XPathNode(
+                nodetest="html",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(axisname=AXISNAMES.DEOS,),
+            XPathNode(
+                nodetest="div",
+                predicates=Conjunction([Predicate("position()", right="2")]),
+            ),
+            XPathNode(nodetest="div",),
+            XPathNode(
+                nodetest="table",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(nodetest="tr",),
+            XPathNode(
+                nodetest="td",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+        ]
+    )
+
+    output = merge(output)
+    assert output == target
+
+
+def test_preprocessing():
+    xpath_g = XPath(
+        [
+            XPathNode(
+                nodetest="body",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(nodetest="div",),
+            XPathNode(axisname=AXISNAMES.DEOS,),
+            XPathNode(
+                nodetest="span",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(
+                nodetest="b",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+        ]
+    )
+    assert str(xpath_g) == "/body[1]/div//span[1]/b[1]"
+    html = fromstring(
+        "<body><div><span><b key='target'></b></span></div><div><div><span><b key='target'></b></span></div></div><div><table><tr><td><span><b key='error'></b></span></td><td></td></tr></table></div></body>"
+    )
+    start_node = html
+    end_nodes = html.xpath("//b[@key='target']")
+    xpaths = [
+        RelativeXPath.new_instance(start_node, end_node) for end_node in end_nodes
+    ]
+    nodes = preprocess(xpath_g, xpaths, lambda x: x.end_node)
+
+    # Step 0:
+    target_in = {
+        html,
+    }
+    target_on = set()
+    output_in, output_on = nodes[0]
+    assert output_in == target_in
+    assert output_on == target_on
+
+    # Step 1:
+    target_in = set(html.xpath("/body/div[1]|/body/div[2]"))
+    target_on = set(html.xpath("/body/div[3]"))
+    output_in, output_on = nodes[1]
+    assert output_in == target_in
+    assert output_on == target_on
+
+    # Step 2:
+    target_in = set(html.xpath("/body/div[1]|/body/div[2]/div"))
+    target_on = set(html.xpath("/body/div[3]/table/tr/td[1]"))
+    output_in, output_on = nodes[2]
+    assert output_in == target_in
+    assert output_on == target_on
+
+    # Step 3:
+    target_in = set(html.xpath("/body/div[1]/span|/body/div[2]/div/span"))
+    target_on = set(html.xpath("/body/div[3]/table/tr/td[1]/span"))
+    output_in, output_on = nodes[3]
+    assert output_in == target_in
+    assert output_on == target_on
+
+    # Step 4:
+    target_in = set(html.xpath("/body/div[1]/span/b|/body/div[2]/div/span/b"))
+    target_on = set(html.xpath("/body/div[3]/table/tr/td[1]/span/b"))
+    output_in, output_on = nodes[4]
+    assert output_in == target_in
+    assert output_on == target_on

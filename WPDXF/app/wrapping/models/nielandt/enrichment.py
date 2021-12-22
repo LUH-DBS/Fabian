@@ -10,7 +10,7 @@ from wrapping.objects.xpath.predicate import (AttributePredicate, Disjunction,
 def preprocess(xpath_g: XPath, xpaths: List[RelativeXPath], sn_func):
     result = []
 
-    for i in range(0, len(xpath_g)):
+    for i in range(1, len(xpath_g) + 1):
         indicated_nodes = set()
         overflow_nodes = set()
 
@@ -18,15 +18,22 @@ def preprocess(xpath_g: XPath, xpaths: List[RelativeXPath], sn_func):
         for xpath in xpaths:
             start_node = sn_func(xpath)
             xp = RelativeXPath(
-                common_path=xpath.common_path + xpath_g[:i],
-                start_path=start_path,
+                common_path=xpath.common_path + xpath_g[: i - 1],
+                start_path=[XPathNode.new_self()] + start_path,
                 start_node=start_node,
+                end_path=xpath_g[i - 1 : i],
             )
-            indicated_nodes = set(node_list(start_node))
+            print(str(xp))
+            nodes = set(node_list(start_node))
             eval_out = set(start_node.xpath(str(xp)))
 
-            indicated_nodes |= eval_out & indicated_nodes
-            overflow_nodes |= eval_out - indicated_nodes
+            # Add all indicated/overflow nodes.
+            indicated_nodes |= eval_out & nodes
+            overflow_nodes |= eval_out - nodes
+            # Remove (now indicated) overflow nodes,
+            # if they were added in an earlier iteration.
+            overflow_nodes -= indicated_nodes
+
         result.append((indicated_nodes, overflow_nodes))
     return result
 

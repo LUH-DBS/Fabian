@@ -83,6 +83,18 @@ class XPathNode:
             return nodetest + str(predicates)
         return f"{self.axisname}::{nodetest}" + str(predicates)
 
+    def __eq__(self, __o: object) -> bool:
+        return (
+            isinstance(__o, XPathNode)
+            and self.axisname == __o.axisname
+            and self.nodetest == __o.nodetest
+            and self.predicates == __o.predicates
+            and self._predicates == __o._predicates
+        )
+
+    def __ne__(self, __o: object) -> bool:
+        return not self.__eq__(__o)
+
     @staticmethod
     def new_instance(step: _Element):
         """Returns a new instance based on an lxml.etree._Element.

@@ -35,7 +35,7 @@ class WebPage:
 
         if key is None:
             return {k: _collect(k) for k in self.matches[select]}
-        if key in self.matches:
+        if key in self.matches[select]:
             return _collect(key)
         return []
 

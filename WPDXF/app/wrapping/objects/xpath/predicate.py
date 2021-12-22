@@ -51,14 +51,15 @@ class Predicate:
         return f"{self.left}{self.comp}{self.right}"
 
     def __eq__(self, __o: object) -> bool:
-        if not isinstance(__o, Predicate):
-            return False
         return (
-            self.left == __o.left and self.comp == __o.comp and self.right == __o.right
+            isinstance(__o, Predicate)
+            and self.left == __o.left
+            and self.comp == __o.comp
+            and self.right == __o.right
         )
 
     def __ne__(self, __o: object) -> bool:
-        return ~self.__eq__(__o)
+        return not self.__eq__(__o)
 
 
 class AttributePredicate(Predicate):
@@ -86,6 +87,17 @@ class Conjunction(UserList):
     def __str__(self) -> str:
         return "".join([f"[{str(p)}]" for p in self])
 
+    def __eq__(self, __o: object) -> bool:
+        if not (hasattr(__o, "__len__") and len(self) == len(__o)):
+            return False
+        for p in self:
+            if not any(o == p for o in __o):
+                return False
+        return True
+
+    def __ne__(self, __o: object) -> bool:
+        return not self.__eq__(__o)
+
 
 class Disjunction(UserList):
     """A disjunction of predicates. In terms of XPath syntax, this is represented as 'A or B'.
@@ -93,3 +105,14 @@ class Disjunction(UserList):
 
     def __str__(self) -> str:
         return " or ".join(map(str, self))
+
+    def __eq__(self, __o: object) -> bool:
+        if not (hasattr(__o, "__len__") and len(self) == len(__o)):
+            return False
+        for p in self:
+            if not any(o == p for o in __o):
+                return False
+        return True
+
+    def __ne__(self, __o: object) -> bool:
+        return not self.__eq__(__o)

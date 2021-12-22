@@ -1,6 +1,6 @@
 from typing import List
 
-from wrapping.objects.xpath.node import XPathNode
+from wrapping.objects.xpath.node import AXISNAMES, XPathNode
 from wrapping.objects.xpath.path import XPath
 
 
@@ -16,18 +16,21 @@ def merge(xpaths: List[XPath]) -> XPath:
             # These are reduced representations of the formal definitions.
             # axisname
             if axisname != xpath[i].axisname:
-                axisname = "descendant-or-self"
+                axisname = AXISNAMES.DEOS
 
-            # nodetest
+            # Case 2: nodetests differ
             if nodetest != xpath[i].nodetest:
                 nodetest = "node()"
+                predicates = None
+                #TODO: special case ("element") is ignored for now
 
             # predicates
             if predicates != xpath[i].predicates:
                 predicates = None
 
-        result.append(
-            XPathNode(axisname=axisname, nodetest=nodetest, predicates=predicates)
-        )
+        if axisname is not AXISNAMES.SELF:
+            result.append(
+                XPathNode(axisname=axisname, nodetest=nodetest, predicates=predicates)
+            )
     return result
 

@@ -96,6 +96,14 @@ def test_nodes():
     target = "descendant::div[key]"
     assert target == str(node)
 
+    n0 = XPathNode()
+    n1 = XPathNode()
+    assert n0 == n1
+
+    n0.axisname = AXISNAMES.SELF
+    assert n0 != n1
+
+
     html = fromstring("<div><a>First a</a><b>First b</b><a>Second a</a></div>")
 
     target = html

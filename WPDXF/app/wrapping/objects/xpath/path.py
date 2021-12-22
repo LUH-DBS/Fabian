@@ -42,6 +42,16 @@ class XPath(UserList):
             repr += "descendant-or-self::node()"
         return repr
 
+    def __eq__(self, __o: object) -> bool:
+        return (
+            hasattr(__o, "__len__")
+            and len(self) == len(__o)
+            and all(self[i] == __o[i] for i in range(len(self)))
+        )
+
+    def __ne__(self, __o: object) -> bool:
+        return not self.__eq__(__o)
+
 
 class RelativeXPath:
     """A relative XPath that returns end_nodes matching the described pattern, relative to the start node.
@@ -76,8 +86,9 @@ class RelativeXPath:
         self.end_node = end_node
 
         self.common_path = XPath(
-            common_path
-            or [XPathNode(axisname=AXISNAMES.DEOS), XPathNode(axisname=AXISNAMES.DEOS),]
+            [XPathNode(axisname=AXISNAMES.DEOS), XPathNode(axisname=AXISNAMES.DEOS),]
+            if common_path is None
+            else common_path
         )
         self.start_path = XPath(start_path)
         self.end_path = XPath(end_path or [XPathNode.new_self()])
