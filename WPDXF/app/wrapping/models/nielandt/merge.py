@@ -22,15 +22,16 @@ def merge(xpaths: List[XPath]) -> XPath:
             if nodetest != xpath[i].nodetest:
                 nodetest = "node()"
                 predicates = None
-                #TODO: special case ("element") is ignored for now
+                # TODO: special case ("element") is ignored for now
 
             # predicates
             if predicates != xpath[i].predicates:
                 predicates = None
 
-        if axisname is not AXISNAMES.SELF:
-            result.append(
-                XPathNode(axisname=axisname, nodetest=nodetest, predicates=predicates)
-            )
+        if i > 0 and axisname is AXISNAMES.SELF:
+            continue
+        result.append(
+            XPathNode(axisname=axisname, nodetest=nodetest, predicates=predicates)
+        )
     return result
 

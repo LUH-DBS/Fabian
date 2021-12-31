@@ -1,6 +1,6 @@
 from wrapping.objects.pairs import Example, Query
 
-from db.queryGenerator import _prepare_pair_stmt, _prepare_stmt, create_token_dict
+from db.queryGenerator import QueryExecutor, _prepare_pair_stmt, _prepare_stmt
 
 
 class TestDBSession:
@@ -31,63 +31,60 @@ def test_create_token_dict():
     queries = [Query(1, "2"), Query(2, "3 4")]
 
     session = TestDBSession()
-    session.func = lambda args: ((t, i) for i, t in enumerate(sorted(args)))
+    session.func = lambda args: ((str(t), int(t)) for t in sorted(args))
 
-    input = (session, examples + queries)
+    query_executor = QueryExecutor()
+    query_executor.session = session
+
+    input = (examples,)
     target = (
-        {
-            "0": 0,  # token -> token_id
-            "1": 1,
-            "2": 2,
-            "3": 3,
-            "4": 4,
-            "pos_000": 0,  # token -> pos
-            "pos_001": 0,
-            "pos_102": 0,
-            "pos_203": 0,
-            "pos_214": 1,
-            "id_0": 0,  # pair_id -> pair_id
-            "id_1": 1,
-            "id_2": 2,
-        },
+        {"0": 0, "1": 1,},  # token -> token_id
         set(),
     )
-    target_stmt = "SELECT token, tokenid FROM tokens WHERE token = %s OR token = %s OR token = %s OR token = %s OR token = %s"
+    target_stmt = "SELECT token, tokenid FROM tokens WHERE token = %s OR token = %s"
 
-    assert target == create_token_dict(*input)
+    query_executor.update_token_dict(*input)
+    assert target == (query_executor.token_dict, query_executor.unknown_tokens)
+    assert session.last_stmt == target_stmt
+
+    input = (queries,)
+    target = (
+        {"0": 0, "1": 1, "2": 2, "3": 3, "4": 4},  # token -> token_id
+        set(),
+    )
+    target_stmt = (
+        "SELECT token, tokenid FROM tokens WHERE token = %s OR token = %s OR token = %s"
+    )
+
+    query_executor.update_token_dict(*input)
+    assert target == (query_executor.token_dict, query_executor.unknown_tokens)
     assert session.last_stmt == target_stmt
 
     # Check behavior on empty token_set
+    query_executor = QueryExecutor()
+    query_executor.session = session
     session.func = lambda args: (("A", 0),)
-    input = (session, set())
+    input = (set(),)
     target = ({}, set())
-    assert target == create_token_dict(*input)
+    query_executor.update_token_dict(*input)
+    assert target == (query_executor.token_dict, query_executor.unknown_tokens)
 
     # Check behavior on missing token_ids
+    query_executor = QueryExecutor()
+    query_executor.session = session
     session.func = lambda args: (
         (t, i) for i, t in enumerate(sorted(args)) if i % 2 == 0
     )
 
-    input = (session, examples + queries)
+    input = (examples + queries,)
     target = (
-        {
-            "0": 0,  # token -> token_id
-            "2": 2,
-            "4": 4,
-            "pos_000": 0,  # token -> pos
-            "pos_001": 0,
-            "pos_102": 0,
-            "pos_203": 0,
-            "pos_214": 1,
-            "id_0": 0,  # pair_id -> pair_id
-            "id_1": 1,
-            "id_2": 2,
-        },
+        {"0": 0, "2": 2, "4": 4,},  # token -> token_id
         set(("1", "3")),
     )
     target_stmt = "SELECT token, tokenid FROM tokens WHERE token = %s OR token = %s OR token = %s OR token = %s OR token = %s"
 
-    assert target == create_token_dict(*input)
+    query_executor.update_token_dict(*input)
+    assert target == (query_executor.token_dict, query_executor.unknown_tokens)
     assert session.last_stmt == target_stmt
 
 
@@ -96,7 +93,7 @@ def test_prepare_query():
     queries = [Query(1, "This is an example query.")]
 
     input = examples[0]
-    target_pair_ex = "SELECT uri, %(id_0)s as match FROM uris WHERE uriid IN (SELECT T0.uriid FROM token_uri_mapping T0 WHERE T0.tokenid = %(example)s \nAND EXISTS (SELECT * FROM token_uri_mapping WHERE tokenid = %(input)s AND uriid = T0.uriid AND position = T0.position + %(pos_01input)s::integer)) AND uriid IN (SELECT T0.uriid FROM token_uri_mapping T0 WHERE T0.tokenid = %(example)s \nAND EXISTS (SELECT * FROM token_uri_mapping WHERE tokenid = %(output)s AND uriid = T0.uriid AND position = T0.position + %(pos_01output)s::integer))"
+    target_pair_ex = "SELECT uri, 0 as match FROM uris WHERE uriid IN (SELECT T0.uriid FROM token_uri_mapping T0 WHERE T0.tokenid = %(example)s AND EXISTS (SELECT * FROM token_uri_mapping WHERE tokenid = %(input)s AND uriid = T0.uriid AND position = T0.position + 1)) AND uriid IN (SELECT T0.uriid FROM token_uri_mapping T0 WHERE T0.tokenid = %(example)s AND EXISTS (SELECT * FROM token_uri_mapping WHERE tokenid = %(output)s AND uriid = T0.uriid AND position = T0.position + 1))"
 
     output = _prepare_pair_stmt(input)
     assert target_pair_ex == output
@@ -111,7 +108,7 @@ def test_prepare_query():
     assert target == output
 
     input = queries[0]
-    target_pair_q = "SELECT uri, %(id_1)s as match FROM uris WHERE uriid IN (SELECT T0.uriid FROM token_uri_mapping T0 WHERE T0.tokenid = %(example)s \nAND EXISTS (SELECT * FROM token_uri_mapping WHERE tokenid = %(query)s AND uriid = T0.uriid AND position = T0.position + %(pos_11query)s::integer))"
+    target_pair_q = "SELECT uri, 1 as match FROM uris WHERE uriid IN (SELECT T0.uriid FROM token_uri_mapping T0 WHERE T0.tokenid = %(example)s AND EXISTS (SELECT * FROM token_uri_mapping WHERE tokenid = %(query)s AND uriid = T0.uriid AND position = T0.position + 1))"
 
     output = _prepare_pair_stmt(input)
     assert target_pair_q == output
@@ -120,7 +117,7 @@ def test_prepare_query():
     target = (
         "SELECT uri, array_agg(match) matches FROM (("
         + target_pair_ex
-        + ")\nUNION ALL\n("
+        + ") UNION ALL ("
         + target_pair_q
         + ")) U GROUP BY uri"
     )

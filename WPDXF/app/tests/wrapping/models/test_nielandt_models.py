@@ -1,7 +1,11 @@
 from lxml.etree import fromstring
 from wrapping.models.basic.evaluate import BasicEvaluator
 from wrapping.models.nielandt.align import align
-from wrapping.models.nielandt.enrichment import preprocess
+from wrapping.models.nielandt.enrichment import (_close_neighbours,
+                                                 _node_names,
+                                                 _preceding_sibling,
+                                                 _similar_attributes,
+                                                 preprocess)
 from wrapping.models.nielandt.merge import merge
 from wrapping.models.nielandt.reduce import NielandtReducer
 from wrapping.models.nielandt.utils import edit_distance
@@ -10,7 +14,8 @@ from wrapping.objects.resource import Resource
 from wrapping.objects.webpage import WebPage
 from wrapping.objects.xpath.node import AXISNAMES, XPathNode
 from wrapping.objects.xpath.path import RelativeXPath, XPath
-from wrapping.objects.xpath.predicate import Conjunction, Predicate
+from wrapping.objects.xpath.predicate import (AttributePredicate, Conjunction,
+                                              Disjunction, Predicate)
 
 
 def test_reduce():
@@ -22,13 +27,15 @@ def test_reduce():
     # Reduce ambiguity on a single WebPage
     r = Resource("example.com", [])
     wp0 = WebPage("www.example.com")
-    wp0._html = "<body><a><a><h1>Input1</h1></a><h2>Output1</h2></a><b><h2>Output1</h2></b><a><a><h1>Input2</h1></a><h2>Output2</h2></a></body>"
+    wp0._html = "<body><a><a><h1>Input1</h1></a><h2 key='target'>Output1</h2></a><b><h2 key='error'>Output1</h2></b><a><a><h1>Input2</h1></a><h2>Output2</h2></a></body>"
     r.webpages = [wp0]
 
-    e.eval_initial(r, examples=examples, queries=[], eval_type=0)
+    e.eval_initial(r, examples, eval_type=0)
     assert len(r.output_matches(0)) == 2
     assert len(r.output_matches(1)) == 1
-    target = wp0.output_matches(0)[:1]
+    target = list(
+        filter(lambda x: x.attrib.get("key") == "target", wp0.output_matches(0))
+    )
 
     reducer.reduce(r)
     assert len(r.output_matches(0)) == 1
@@ -46,7 +53,7 @@ def test_reduce():
     wp2._html = "<body><a><a><h1>Input2</h1></a><h2>Output2</h2></a></body>"
     r.webpages = [wp0, wp1, wp2]
 
-    e.eval_initial(r, examples=examples, queries=[], eval_type=0)
+    e.eval_initial(r, examples, eval_type=0)
     assert len(r.output_matches(0)) == 2
     assert len(r.output_matches(1)) == 1
 
@@ -66,7 +73,7 @@ def test_reduce():
     wp1._html = "<body><a>Input2</a><c>Output2</c><b>Output2</b></body>"
     r.webpages = [wp0, wp1]
 
-    e.eval_initial(r, examples=examples, queries=[], eval_type=0)
+    e.eval_initial(r, examples, eval_type=0)
 
     assert len(r.output_matches(0)) == 2
     target_0 = r.output_matches(0)[:1]
@@ -89,7 +96,7 @@ def test_reduce():
     wp2._html = "<body><a>Input3</a><b><c>Output3</c></b></body>"
     r.webpages = [wp0, wp1, wp2]
 
-    e.eval_initial(r, examples=examples, queries=[], eval_type=0)
+    e.eval_initial(r, examples, eval_type=0)
     assert len(r.output_matches(0)) == 1
     assert len(r.output_matches(1)) == 1
     assert len(r.output_matches(2)) == 1
@@ -492,3 +499,372 @@ def test_preprocessing():
     output_in, output_on = nodes[4]
     assert output_in == target_in
     assert output_on == target_on
+
+
+def test_enrichment():
+    # Preceding Sibling
+    html0 = fromstring(
+        "<html><head></head><body><div><div key='target'></div></div></body></html>"
+    )
+    html1 = fromstring(
+        "<html><head></head><body><div><div key='error'></div><div key='target'></div></div></body></html>"
+    )
+    xpath = XPath(
+        [
+            XPathNode(
+                nodetest="html",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(
+                nodetest="body",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(
+                nodetest="div",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(nodetest="div"),
+        ]
+    )
+
+    target = XPath(
+        [
+            XPathNode(
+                nodetest="html",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(
+                nodetest="body",
+                predicates=Conjunction(
+                    [
+                        Predicate("position()", right="1"),
+                        Predicate("preceding-sibling::head"),
+                    ]
+                ),
+            ),
+            XPathNode(
+                nodetest="div",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(nodetest="div"),
+        ]
+    )
+    _preceding_sibling(xpath[1], html0.xpath("//body") + html1.xpath("//body"), set())
+    assert xpath == target
+
+    # Preceding sibling is the same for indicated and overflow nodes.
+    xpath = XPath(
+        [
+            XPathNode(
+                nodetest="html",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(
+                nodetest="body",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(
+                nodetest="div",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(nodetest="div"),
+        ]
+    )
+
+    target = XPath(
+        [
+            XPathNode(
+                nodetest="html",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(
+                nodetest="body",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(
+                nodetest="div",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(nodetest="div"),
+        ]
+    )
+    _preceding_sibling(xpath[1], html0.xpath("//body"), html1.xpath("//body"))
+    assert xpath == target
+
+    # Similar attributes
+    html0 = fromstring(
+        "<html><body><div><div><div class='name' group='1'>Frank</div></div></div></body></html>"
+    )
+    html1 = fromstring(
+        "<html><body><div><div><div class='name'>Daisy</div></div><div><div class='name'>Jos</div></div><div><div class='name' group='2'>Lisa</div></div></div></body></html>"
+    )
+    xpath = XPath(
+        [
+            XPathNode(
+                nodetest="html",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(
+                nodetest="body",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(
+                nodetest="div",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(nodetest="div"),
+            XPathNode(
+                nodetest="div",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+        ]
+    )
+
+    target = XPath(
+        [
+            XPathNode(
+                nodetest="html",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(
+                nodetest="body",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(
+                nodetest="div",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(nodetest="div"),
+            XPathNode(
+                nodetest="div",
+                predicates=Conjunction(
+                    [
+                        Predicate("position()", right="1"),
+                        AttributePredicate("class", right="name"),
+                        AttributePredicate("group"),
+                    ]
+                ),
+            ),
+        ]
+    )
+    _similar_attributes(
+        xpath[4],
+        html0.xpath("/html/body/div/div/div")
+        + html1.xpath("/html/body/div/div[3]/div"),
+        set(),
+    )
+    assert xpath == target
+
+    # Same as above with overflow nodes
+    xpath = XPath(
+        [
+            XPathNode(
+                nodetest="html",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(
+                nodetest="body",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(
+                nodetest="div",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(nodetest="div"),
+            XPathNode(
+                nodetest="div",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+        ]
+    )
+
+    _similar_attributes(
+        xpath[4],
+        html0.xpath("/html/body/div/div/div")
+        + html1.xpath("/html/body/div/div[3]/div"),
+        html1.xpath("/html/body/div/div[position() < 3]/div"),
+    )
+    assert xpath == target, str(xpath)
+
+    # Node names
+    html0 = fromstring("<html><body><div><h1><span></span></h1></div></body></html>")
+    html1 = fromstring(
+        "<html><body><div><div><span></span></div><p><span></span></p></div></body></html>"
+    )
+
+    xpath = XPath(
+        [
+            XPathNode(
+                nodetest="html",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(
+                nodetest="body",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(
+                nodetest="div",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(predicates=Conjunction([Predicate("position()", right="1")])),
+            XPathNode(
+                nodetest="span",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+        ]
+    )
+
+    target = XPath(
+        [
+            XPathNode(
+                nodetest="html",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(
+                nodetest="body",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(
+                nodetest="div",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(predicates=Conjunction([Predicate("position()", right="1"),])),
+            XPathNode(
+                nodetest="span",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+        ]
+    )
+
+    _node_names(
+        xpath[3],
+        html0.xpath("/html/body/div/h1") + html1.xpath("/html/body/div/div"),
+        set(),
+    )
+    assert xpath == target, str(xpath)
+
+    target = XPath(
+        [
+            XPathNode(
+                nodetest="html",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(
+                nodetest="body",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(
+                nodetest="div",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(
+                predicates=Conjunction(
+                    [
+                        Predicate("position()", right="1"),
+                        Disjunction([Predicate("self::h1"), Predicate("self::div")]),
+                    ]
+                )
+            ),
+            XPathNode(
+                nodetest="span",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+        ]
+    )
+
+    _node_names(
+        xpath[3],
+        html0.xpath("/html/body/div/h1") + html1.xpath("/html/body/div/div"),
+        html1.xpath("/html/body/div/p"),
+    )
+    assert xpath == target, str(xpath)
+
+    # Close neighbours
+    html0 = fromstring(
+        """
+<html>
+  <body>
+    <div>
+      <h1>Name:</h1>
+      <div><div>NameA</div></div>
+    </div>
+    <div>
+      <h1>Other:</h1>
+      <div><div>OtherA</div></div>
+    </div>
+  </body>
+</html>"""
+    )
+    html1 = fromstring(
+        """
+<html>
+  <body>
+    <div>
+      <h1>Name:</h1>
+      <div><div>NameB</div></div>
+    </div>
+    <div>
+      <h1>Other:</h1>
+      <div><div>OtherB</div></div>
+    </div>
+  </body>
+</html>"""
+    )
+
+    xpath = XPath(
+        [
+            XPathNode(
+                nodetest="html",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(
+                nodetest="body",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(nodetest="div"),
+            XPathNode(
+                nodetest="div",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(
+                nodetest="div",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+        ]
+    )
+
+    target = XPath(
+        [
+            XPathNode(
+                nodetest="html",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(
+                nodetest="body",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(nodetest="div"),
+            XPathNode(
+                nodetest="div",
+                predicates=Conjunction([Predicate("position()", right="1")]),
+            ),
+            XPathNode(
+                nodetest="div",
+                predicates=Conjunction(
+                    [
+                        Predicate("position()", right="1"),
+                        Predicate("./../preceding-sibling::h1/text()[1]='Name:'"),
+                    ]
+                ),
+            ),
+        ]
+    )
+
+    _close_neighbours(
+        xpath[4],
+        html0.xpath("/html/body/div[1]/div/div")
+        + html1.xpath("/html/body/div[1]/div/div"),
+        html0.xpath("/html/body/div[2]/div/div")
+        + html1.xpath("/html/body/div[2]/div/div"),
+    )
+    assert xpath == target, str(xpath)

@@ -1,10 +1,11 @@
+from copy import deepcopy
 from typing import List
 
 from lxml.etree import ElementBase
 from wrapping.objects.xpath.node import AXISNAMES, XPathNode
 from wrapping.objects.xpath.path import RelativeXPath, XPath, node_list
-from wrapping.objects.xpath.predicate import (AttributePredicate, Disjunction,
-                                              Predicate)
+from wrapping.objects.xpath.predicate import (AttributePredicate, Conjunction,
+                                              Disjunction, Predicate)
 
 
 def preprocess(xpath_g: XPath, xpaths: List[RelativeXPath], sn_func):
@@ -23,7 +24,6 @@ def preprocess(xpath_g: XPath, xpaths: List[RelativeXPath], sn_func):
                 start_node=start_node,
                 end_path=xpath_g[i - 1 : i],
             )
-            print(str(xp))
             nodes = set(node_list(start_node))
             eval_out = set(start_node.xpath(str(xp)))
 
@@ -62,7 +62,9 @@ def _preceding_sibling(step, indicated_nodes, overflow_nodes):
         return set(e.tag for e in element.xpath("preceding-sibling::*"))
 
     indicated_tags = set.intersection(*map(collect, indicated_nodes))
-    overflow_tags = set.union(*map(collect, overflow_nodes))
+    overflow_tags = (
+        set.union(*map(collect, overflow_nodes)) if overflow_nodes else set()
+    )
     common_tags = indicated_tags - overflow_tags
 
     step.predicates.extend(
@@ -76,7 +78,7 @@ def _similar_attributes(step, indicated_nodes, overflow_nodes):
     # Otherwise, check for key existance.
     similar_attributes = []
 
-    eq_keys = set.intersection(set(node.attrib) for node in indicated_nodes)
+    eq_keys = set.intersection(*(set(node.attrib) for node in indicated_nodes))
     for key in eq_keys:
         value = indicated_nodes[0].attrib[key]
         if all(node.attrib[key] == value for node in indicated_nodes[1:]):
@@ -92,35 +94,91 @@ def _similar_attributes(step, indicated_nodes, overflow_nodes):
 def _node_names(step, indicated_nodes, overflow_nodes):
     # Reduce the expressivity of an arbitrary 'node()' also '*'
     # by adding a disjunction of all indicated nodetests.
-    if step.nodetest != "node()":
+    if not overflow_nodes:
         return
-    node_names = set(node.tag for node in indicated_nodes)
-    if node_names:
-        step.predicate.append(
-            Disjunction(Predicate(f"self::{nt}") for nt in node_names)
+
+    indicated_names = set(node.tag for node in indicated_nodes)
+    overflow_names = set(node.tag for node in overflow_nodes)
+    if not (indicated_names & overflow_names):
+        step.predicates.append(
+            Disjunction(Predicate(f"self::{nt}") for nt in indicated_names)
         )
+    # TODO: Integer check is ignored for now.
 
 
-def _close_neighbours(indicated_nodes, overflow_nodes):
-    def _collect(nodes, axisname):
-        close_neighbours = None
-        basepath = XPath([XPathNode.new_self(), XPathNode(axisname=AXISNAMES.PAR)])
-        query = str(basepath + XPathNode(axisname=axisname))
-        for element in nodes:
-            neighbours = element.xpath(query)
-            neighbours = [(e.tag, e.xpath("string()")) for e in neighbours]
-            for nodetest, string in neighbours:
-                if close_neighbours is None:
-                    close_neighbours = neighbours
-                    continue
+def _close_neighbours(step, indicated_nodes, overflow_nodes):
+    def _collect(nodes: List[ElementBase], path: XPath):
+        text_dict = None
+        for node in nodes:
+            neighbours = node.xpath(str(path))
+            if text_dict is None:
+                text_dict = {
+                    text: set([(n.tag, i + 1)])
+                    for n in neighbours
+                    for i, text in enumerate(n.xpath("text()"))
+                }
+            else:
+                new_text_dict = {
+                    text: set([(n.tag, i + 1)])
+                    for n in neighbours
+                    for i, text in enumerate(n.xpath("text()"))
+                }
+                new_keys = set(text_dict) & set(new_text_dict)
 
-                this_neighbours = list(
-                    filter(lambda x: x[1] == string, close_neighbours)
-                )
-                if not this_neighbours:
-                    continue
+                text_dict = {
+                    key: text_dict[key] | new_text_dict[key] for key in new_keys
+                }
+                if not text_dict:
+                    break
+        return text_dict
 
-                # TODO...
+    if len(indicated_nodes) < 2 or len(overflow_nodes) < 2:
+        return
+
+    # Nephews:
+    path = XPath(
+        [
+            XPathNode.new_self(),
+            XPathNode(axisname=AXISNAMES.PAR),
+            XPathNode(axisname=AXISNAMES.PSIB),
+        ]
+    )
+    indicated_td = _collect(indicated_nodes, path)
+    overflow_td = _collect(overflow_nodes, path)
+
+    for key in indicated_td:
+        if key in overflow_td:
+            break
+        key_path = deepcopy(path)
+        key_path.append(XPathNode(nodetest="text()"))
+
+        if len(indicated_td[key]) == 1:
+            tag, position = list(indicated_td[key])[0]
+            key_path[-2].nodetest = tag
+            key_path[-1].predicates.append(Predicate("position()", right=position))
+        step.predicates.append(Predicate(left=f"{key_path}='{key}'"))
+
+    path = XPath(
+        [
+            XPathNode.new_self(),
+            XPathNode(axisname=AXISNAMES.PAR),
+            XPathNode(axisname=AXISNAMES.FSIB),
+        ]
+    )
+    indicated_td = _collect(indicated_nodes, path)
+    overflow_td = _collect(overflow_nodes, path)
+
+    for key in indicated_td:
+        if key in overflow_td:
+            break
+        key_path = deepcopy(path)
+        key_path.append(XPathNode(nodetest="text()"))
+
+        if len(indicated_td[key]) == 1:
+            tag, position = list(indicated_td[key])[0]
+            key_path[-2].nodetest = tag
+            key_path[-1].predicates.append(Predicate("position()", right=position))
+        step.predicates.append(Predicate(left=f"{key_path}='{key}'"))
 
 
 def _common_prefixes(step, indicated_nodes, overflow_nodes):

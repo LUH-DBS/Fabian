@@ -69,16 +69,16 @@ def test_eval_initial():
         4,
     }
 
-    e._eval_wp_initial(wp, examples, queries, eval_type_0)
+    e._eval_wp_initial(wp, examples + queries, eval_type_0)
 
-    assert target_ex_matches == set(wp.matches["true"])
+    assert target_ex_matches == set(wp.matches)
     assert target_q_matches == set(wp.q_matches)
 
     # eval_initial (based on webpage above)
     r = Resource("example.com", [])
     r.webpages = [wp]
 
-    e.eval_initial(r, examples, queries, 0)
+    e.eval_initial(r, examples + queries, 0)
     assert target_ex_matches == r.matched_examples()
     assert target_q_matches == r.matched_queries()
 

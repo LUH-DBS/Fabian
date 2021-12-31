@@ -6,103 +6,68 @@ from wrapping.tree.filter import TauMatchFilter
 
 __SESSION_TYPES__ = ("postgres",)  # ("postgres", "vertica") "vertica" deprecated
 
+class QueryExecutor:
+    def __init__(self, session_type="postgres") -> None:
+        assert session_type in __SESSION_TYPES__
 
-def token_position_expr(pair_id, position, token):
-    return f"pos_{pair_id}{position}{token}"
+        if session_type == "postgres":
+            from db.PostgresDBSession import PostgresDBSession
 
+            self.session = PostgresDBSession()
+        # elif session_type == "vertica":
+        #     from db.VerticaDBSession import VerticaDBSession
+        #     session = VerticaDBSession()
 
-def pair_id_expr(pair_id):
-    return f"id_{pair_id}"
+        self.token_dict = {}
+        self.unknown_tokens = set()
 
+    def update_token_dict(self, pairs: List[Pair]):
+        """Prepares the dictionary of named variables used during statement execution.
+        Retrieves the token -> token_id mapping for the included tokens.
+        Tokens that cannot be found in the DB, are not included in the mapping, but added to the unknown_tokens set.
 
-def create_token_dict(session, pairs: List[Pair]) -> Dict[str, int]:
-    """Prepares the dictionary of named variables used during statement execution.
-    Retrieves the token -> token_id mapping for the included tokens.
-    The output contains token -> token_id mapping, token -> token_position mapping and pair -> pair_id mapping.
-    Tokens that cannot be found in the DB, are not included in the mapping.
+        Args:
+            pairs (List[Pair]): The pairs (examples and queries) of the current execution.
+        """
+        if not pairs:
+            return
+        # Union of all tokens, without already cached tokens.
+        token_set = set.union(*(pair.tokens() for pair in pairs)) - set(self.token_dict)
 
-    Args:
-        session: Database connection (e.g. PostgresDBSession)
-        token_set (Set[str]): The set of tokens for which the token_ids are required.
-
-    Returns:
-        Dict[str, int]: named variables.
-        set: Tokens without a token_id in the DB.
-    """
-    token_dict = {}
-    token_set = set()
-    if not pairs:
-        return token_dict, token_set
-    for pair in pairs:
-        token_set |= pair.tokens()
-
-        token_dict.update(
-            {
-                token_position_expr(pair.id, idx, token): idx
-                for token, idx in pair.tok_inp + pair.tok_out
-            }
+        stmt = "SELECT token, tokenid FROM tokens WHERE " + " OR ".join(
+            ["token = %s"] * len(token_set)
         )
-        token_dict[pair_id_expr(pair.id)] = pair.id
+        with self.session.execute(stmt, tuple(token_set)) as cur:
+            self.token_dict.update(dict(cur.fetchall()))
+        self.unknown_tokens |= token_set - set(self.token_dict)
 
-    stmt = "SELECT token, tokenid FROM tokens WHERE " + " OR ".join(
-        ["token = %s"] * len(token_set)
-    )
-    with session.execute(stmt, tuple(token_set)) as cur:
-        token_dict.update(dict(cur.fetchall()))
-    unknown_tokens = token_set - set(token_dict)
-    return token_dict, unknown_tokens
+    def get_uris_for(
+        self, examples: List[Example], queries: List[Query]
+    ) -> Dict[str, Tuple[List[int], List[int]]]:
 
+        # Cache tokens
+        self.update_token_dict(examples + queries)
+        # Prune examples/queries
+        for token in self.unknown_tokens:
+            for example in examples.copy():
+                if token in example.tokens():
+                    examples.remove(example)
+            for query in queries.copy():
+                if token in query.tokens():
+                    queries.remove(query)
 
-def get_uris_for(
-    examples: List[Example], queries: List[Query], session_type: str = "postgres",
-) -> Dict[str, Tuple[List[int], List[int]]]:
-    """Returns a uri-match-mapping (uri -> (example_matches, query_matches)) 
-    for each website that contains at least one example or query.
+        example_matches = _execute_query(self.session, examples, self.token_dict)
+        query_matches = _execute_query(self.session, queries, self.token_dict)
 
-    Args:
-        examples (List[Example]): List of input examples.
-        queries (List[Query]): List of input queries.
-        session_type (str, optional): Specifies the DB type and 
-        therefore the DB Connection used for querying. Defaults to "postgres".
+        matches = {}
+        for key in set(example_matches) | set(query_matches):
+            matches[key] = (example_matches.get(key, []), query_matches.get(key, []))
 
-    Returns:
-        Dict[str, Tuple[List[int], List[int]]]: uri -> matches mapping
-    """
-
-    assert session_type in __SESSION_TYPES__
-
-    if session_type == "postgres":
-        from db.PostgresDBSession import PostgresDBSession
-
-        session = PostgresDBSession()
-    # elif session_type == "vertica":
-    #     from db.VerticaDBSession import VerticaDBSession
-    #     session = VerticaDBSession()
-
-    token_dict, unknown_tokens = create_token_dict(session, examples + queries)
-
-    # If a token is not existent in the corpus, the whole example/query is not worth to be considered.
-    if unknown_tokens:
-        for ex in examples.copy():
-            if any(tok in ex for tok in unknown_tokens):
-                # if any(filter(lambda x: x in ex, unknown_tokens)):
-                examples.remove(ex)
-        for q in queries.copy():
-            if any(tok in q for tok in unknown_tokens):
-                queries.remove(q)
-
-    candidates = defaultdict(lambda: ([], []))
-    _execute_query(session, examples, token_dict, candidates)
-    _execute_query(session, queries, token_dict, candidates)
-    return dict(candidates)
+        return matches
 
 
 def _execute_query(
-    session,
-    pairs: List[Pair],
-    token_dict: dict,
-    candidates: defaultdict,
-    idx: int = None,
+    session, pairs: List[Pair], token_dict: dict,
 ):
     """Generic Wrapper: Applicable for examples and queries. 
     Generates the statement based on given pairs and
@@ -113,16 +78,14 @@ def _execute_query(
         session : Database connection (e.g. PostgresDBSession)
         pairs (List[Pair]): List of either examples or queries
         token_dict (dict): token -> token_id mapping
-        candidates (defaultdict): uri -> matches mapping
-        idx (int, optional): Index position inside candidate's matches. 
-        Defaults to 1 if List[Query] is passed, 0 oterwise.
     """
-    idx = idx or int(isinstance(pairs[0], Query))
+    if not pairs:
+        return {}
     stmt = _prepare_stmt(pairs)
-    with session.execute(stmt, token_dict) as cursor:
-        for uri, matches in cursor:
-            candidates[uri][idx].extend(matches)
-        print(cursor.query)
+    with session.execute(stmt, token_dict) as cur:
+        result = dict(cur.fetchall())
+        print(cur.query)
+    return result
 
 
 def _prepare_stmt(pairs: List[Pair]) -> str:
@@ -135,8 +98,11 @@ def _prepare_stmt(pairs: List[Pair]) -> str:
     Returns:
         str: The complete statement to evaluate against DB.
     """
-    union = "\nUNION ALL\n".join([f"({_prepare_pair_stmt(p)})" for p in pairs])
-    return f"SELECT uri, array_agg(match) matches FROM ({union}) U GROUP BY uri"
+    return (
+        "SELECT uri, array_agg(match) matches FROM ("
+        + " UNION ALL ".join([f"({_prepare_pair_stmt(p)})" for p in pairs])
+        + ") U GROUP BY uri"
+    )
 
 
 def _prepare_pair_stmt(pair: Pair) -> str:
@@ -152,18 +118,18 @@ def _prepare_pair_stmt(pair: Pair) -> str:
     def _prepare_subquery_stmt(vals: List[Tuple[str, int]]):
         # Query for each token list: Find entries in 'token_uri_mapping' that match the first token in the list.
         # Check if the following positions match the other tokens using a semi-join.
-        stmt = f"SELECT T0.uriid FROM token_uri_mapping T0 WHERE T0.tokenid = %({vals[0][0]})s \n"
+        stmt = f"SELECT T0.uriid FROM token_uri_mapping T0 WHERE T0.tokenid = %({vals[0][0]})s "
         for token, idx in vals[1:]:
             stmt += (
                 "AND EXISTS (SELECT * FROM token_uri_mapping "
                 + f"WHERE tokenid = %({token})s "
                 + "AND uriid = T0.uriid "
-                + f"AND position = T0.position + %({token_position_expr(pair.id, idx, token)})s::integer)"
+                + f"AND position = T0.position + {idx})"
             )
         return stmt
 
     inp, out = pair.tok
-    stmt = f"SELECT uri, %({pair_id_expr(pair.id)})s as match FROM uris WHERE uriid IN ({_prepare_subquery_stmt(inp)})"
+    stmt = f"SELECT uri, {pair.id} as match FROM uris WHERE uriid IN ({_prepare_subquery_stmt(inp)})"
     if out:
         stmt += f" AND uriid IN ({_prepare_subquery_stmt(out)})"
     return stmt

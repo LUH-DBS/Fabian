@@ -84,8 +84,7 @@ class BasicEvaluator:
     def eval_initial(
         self,
         resource: Resource,
-        examples: List[Example],
-        queries: List[Query],
+        pairs: List[Pair],
         eval_type: int,
     ):
         """Evaluates each webpage of the given 'resource' against the specified 'eval_type'. 
@@ -106,7 +105,7 @@ class BasicEvaluator:
         )
         for wp in resource.webpages.copy():
             try:
-                self._eval_wp_initial(wp, examples, queries, eval_func)
+                self._eval_wp_initial(wp, pairs, eval_func)
             except etree.ParserError as e:
                 # If a webpage cannot be parsed correctly,
                 # remove it from all further considerations.
@@ -120,31 +119,8 @@ class BasicEvaluator:
                 resource.webpages.remove(wp)
                 raise e
 
-    def evaluate(self, resource: Resource, examples: List[Example]):
-        # At the moment used for debugging, not relevant.
-        # Evaluates all known inputs of all webpages against the given resource.out_xpath.
-        for wp in resource.webpages:
-            matches = {
-                "true": defaultdict(lambda: defaultdict(list)),
-                "false": defaultdict(lambda: defaultdict(list)),
-            }
-            for key, inp_vals in wp.matches["true"].items():
-                for inp, out_vals in inp_vals.items():
-                    old_matches = out_vals
-                    q = resource.out_xpath.as_xpath(start_node=inp)
-                    eval_out = inp.xpath(q)
-                    eval_out = list(map(self._ensure_ElementBase, eval_out))
-                    if eval_out:
-                        matches["true"][key][inp].extend(
-                            [val for val in eval_out if val in old_matches]
-                        )
-                        matches["false"][key][inp].extend(
-                            [val for val in eval_out if val not in old_matches]
-                        )
-            wp.matches = dict(matches)
-
     def evaluate_query(
-        self, resource: Resource, queries: List[Query]
+        self, resource: Resource, pairs: List[Pair]
     ) -> Dict[int, List[str]]:
         """Evaluates all webpages matched queries against the out_xpath provided by the resource.
         Outputs are transformed into their textual information (str).
@@ -157,52 +133,37 @@ class BasicEvaluator:
             Dict[int, List[str]]: Mapping from query_id to all retrieved outputs.
         """
         result = {}
-        for q in queries:
+        for pair in pairs:
             key_vals = []
             for wp in resource.webpages:
-                for inp in wp.q_matches.get(q.id, []):
+                for inp in wp.all_matches.get(pair.id, []):
                     out_xpath = resource.out_xpath.as_xpath(start_node=inp)
                     eval_out = inp.xpath(out_xpath)
                     if eval_out:
                         key_vals.extend([element_str(e) for e in eval_out])
-            result[q] = key_vals
+            result[pair] = key_vals
         return result
 
     def _eval_wp_initial(
-        self,
-        webpage: WebPage,
-        examples: List[Example],
-        queries: List[Query],
-        eval_func,
+        self, webpage: WebPage, pairs: List[Pair], eval_func,
     ):
-        """Evaluation of a single webpage. Input and output are evaluated. 
-        Only if both values can be found, it is registered as a match.
-        """
-
-        def _eval_func(pairs, target: ElementTree, eval_func):
-            matches = {}
-            for pair in pairs:
-                q_in, params_in, q_out, params_out = eval_func(pair)
-
-                eval_inp = target.xpath(q_in, **params_in)
-                if not eval_inp:
-                    continue
-
-                eval_out = []
-                if isinstance(pair, Example):
-                    eval_out = target.xpath(q_out, **params_out)
-                    if not eval_out:
-                        continue
-
-                matches[pair.id] = {key: eval_out for key in eval_inp}
-            return matches
-
         # raises etree.ParserError on bad formatted html
         # h = html.fromstring(webpage.html)
         # tree = etree.ElementTree(h)
         tree = etree.HTML(webpage.html)
 
-        webpage.matches["true"] = _eval_func(examples, tree, eval_func)
+        for pair in pairs:
+            q_in, params_in, q_out, params_out = eval_func(pair)
 
-        query_matches = _eval_func(queries, tree, eval_func)
-        webpage.q_matches = {k: list(query_matches[k]) for k in query_matches}
+            eval_inp = tree.xpath(q_in, **params_in)
+            if not eval_inp:
+                continue
+
+            if isinstance(pair, Query):
+                eval_out = [None]
+            else:
+                eval_out = tree.xpath(q_out, **params_out)
+
+            for inp in eval_inp:
+                for out in eval_out:
+                    webpage.add_match(pair.id, inp, out)

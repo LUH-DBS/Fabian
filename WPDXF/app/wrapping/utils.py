@@ -18,6 +18,6 @@ def load_and_prepare_examples(file, example_split=0.8):
 
     examples = [(ex["input"], ex["output"]) for ex in examples]
     queries_gt = [(q["input"], q["output"]) for q in queries]
-    queries = [(q["input"], None) for q in queries]
+    queries = [q["input"] for q in queries]
 
     return examples, queries, queries_gt
