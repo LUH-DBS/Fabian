@@ -4,7 +4,7 @@ from os import makedirs
 from os.path import abspath, isdir, join
 from time import time
 
-from dataXFormer.webtableindexer.Tokenizer import Tokenizer
+from DataXFormer.webtableindexer.Tokenizer import Tokenizer
 from pandas.core.frame import DataFrame
 
 BASEDIR = "../data/reports"

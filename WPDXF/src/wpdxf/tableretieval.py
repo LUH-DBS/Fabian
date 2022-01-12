@@ -1,5 +1,5 @@
-from dataXFormer.data.Answer import Answer
-from dataXFormer.data.DBUtil import getDBUtil
+from DataXFormer.data.Answer import Answer
+from DataXFormer.data.DBUtil import getDBUtil
 
 from wpdxf.db.queryGenerator import QueryExecutor
 from wpdxf.wrapping.models.basic.evaluate import BasicEvaluator
@@ -59,9 +59,9 @@ class WebPageRetrieval:
 
 class WebTableRetrieval:
     def run(self, examples, queries, tau=2):
-        from dataXFormer.webtableindexer.Tokenizer import Tokenizer
-        from dataXFormer.webtables.TableScore import TableScorer
-        from dataXFormer.webtables.Transformer import DirectTransformer
+        from DataXFormer.webtableindexer.Tokenizer import Tokenizer
+        from DataXFormer.webtables.TableScore import TableScorer
+        from DataXFormer.webtables.Transformer import DirectTransformer
 
         tableLimit = None
 

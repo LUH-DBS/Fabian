@@ -7,8 +7,8 @@ from typing import List
 
 from pandas import DataFrame, read_csv
 
-from dataXFormer.webtableindexer.Tokenizer import Tokenizer
-from dataXFormer.webtables.TableScore import TableScorer
+from DataXFormer.webtableindexer.Tokenizer import Tokenizer
+from DataXFormer.webtables.TableScore import TableScorer
 from wpdxf.tableretieval import WebPageRetrieval, WebTableRetrieval
 from wpdxf.utils.report import ReportWriter
 
