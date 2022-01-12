@@ -25,4 +25,4 @@ class TauMatchFilter:
         return True
 
     def filter(self, ex_matches: set, q_matches: set) -> bool:
-        return len(ex_matches) >= self.tau
+        return len(ex_matches) >= self.tau# and len(q_matches) > 0

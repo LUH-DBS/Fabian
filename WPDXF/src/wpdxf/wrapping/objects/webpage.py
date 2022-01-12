@@ -70,3 +70,18 @@ class WebPage:
         if key in self.examples:
             return _collect(key)
         return []
+
+    def info(self):
+        outstr = f"Webpage: {self.uri}\n"
+
+        outstr += "Examples:\n"
+        for key, inps in self.examples.items():
+            for inp, outs in inps.items():
+                outstr += f"{key} - {inp}: {outs}\n"
+
+        outstr += "Queries:\n"
+        for key, inps in self.queries.items():
+            for inp in inps:
+                outstr += f"{key} - {inp}: \n"
+
+        return outstr + "\n"

@@ -43,22 +43,39 @@ class Resource:
         return set()
 
     def info(self):
+        xpath = (
+            None
+            if self.out_xpath is None
+            else self.out_xpath.as_xpath(abs_start_path="$input")
+        )
+        outstr = f"Resource: {self.id}\nCurrent XPath: {xpath}\nNumWebpages: {len(self.webpages)}\n\n"
+
         input_elements = []
         output_elements = []
         query_elements = []
+
+        outstr += "Webpages:\n"
         for wp in self.webpages:
+
+            outstr += wp.info()
+
             for key, inps in wp.examples.items():
                 input_elements.extend(inps)
                 for outs in inps.values():
                     output_elements.extend(outs)
             for key, qs in wp.queries.items():
                 query_elements.extend(qs)
-        print("Input")
+
+        outstr += "XPath Summary:\n"
+
+        outstr += "Input XPaths:\n"
         for elem in input_elements:
-            print(elem.getroottree().getpath(elem))
-        print("Output")
-        for elem in output_elements:
-            print(elem.getroottree().getpath(elem))
-        print("Query")
+            outstr += f"{elem}: {elem.getroottree().getpath(elem)}\n"
+        outstr += "Query XPaths:\n"
         for elem in query_elements:
-            print(elem.getroottree().getpath(elem))
+            outstr += f"{elem}: {elem.getroottree().getpath(elem)}\n"
+        outstr += "Output XPaths:\n"
+        for elem in output_elements:
+            outstr += f"{elem}: {elem.getroottree().getpath(elem)}\n"
+        
+        return outstr

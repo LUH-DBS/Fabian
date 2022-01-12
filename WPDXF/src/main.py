@@ -1,18 +1,16 @@
 import argparse
-from difflib import SequenceMatcher
+import logging
+from datetime import datetime
 from enum import Enum
-from os.path import abspath, isfile, join
+from os.path import abspath, basename, isfile, join, splitext
 from typing import List
 
 from pandas import DataFrame, read_csv
 
+from dataXFormer.webtableindexer.Tokenizer import Tokenizer
 from dataXFormer.webtables.TableScore import TableScorer
 from wpdxf.tableretieval import WebPageRetrieval, WebTableRetrieval
-# WebPage DataXFormer
-from wpdxf.wrapping.models.basic.evaluate import BasicEvaluator
-from wpdxf.wrapping.models.nielandt.induce import NielandtInduction
-from wpdxf.wrapping.models.nielandt.reduce import NielandtReducer
-from wpdxf.wrapping.tree.filter import TauMatchFilter
+from wpdxf.utils.report import ReportWriter
 
 BENCHMARKS = "../data/benchmarks/"
 
@@ -59,6 +57,8 @@ def split_benchmark(
 
 
 def parse_args():
+    filename = []
+
     def dataframe(file):
         # Search for valid path
         # Input is a valid path itself.
@@ -70,7 +70,10 @@ def parse_args():
         else:
             raise FileNotFoundError
         filepath = abspath(filepath)
-        return read_csv(filepath, encoding="utf-8", encoding_errors="strict")
+        filename.append(filepath)
+        return read_csv(filepath, encoding="utf-8", encoding_errors="strict").astype(
+            str
+        )
 
     parser = argparse.ArgumentParser(description="")
     # Evaluation mode
@@ -86,7 +89,7 @@ def parse_args():
     parser.add_argument(
         "-b",
         "--benchmark",
-        type=dataframe,
+        type=str,
         required=True,
         help="File (csv) used for evaluation",
     )
@@ -105,66 +108,52 @@ def parse_args():
     parser.add_argument("--num_queries", default=8, type=int)
 
     args = parser.parse_args()
+    args.filename = args.benchmark
+    args.benchmark = dataframe(args.benchmark)
+
+    filename_short = splitext(basename(args.filename))[0]
+    rw = ReportWriter(f"{args.mode}-{filename_short}")
+
+    rw.write_metafile(
+        filename=filename[0],
+        date=datetime.now().isoformat(timespec="seconds"),
+        mode=args.mode,
+        inputCols=args.input,
+        outputCols=args.output,
+        seed=args.seed,
+        num_examples=args.num_examples,
+        num_queries=args.num_queries,
+    )
+
     split = split_benchmark(**vars(args))
 
-    return args.mode, split[::2], split[1:2], split[1::2]
+    return args.mode, [*zip(*split[::2])], [*zip(*split[1:2])], [*zip(*split[1::2])]
 
 
-def main():
-    mode, examples, queries, groundtruth = parse_args()
-    groundtruth = [(x[0], y[0]) for x, y in zip(*(examples))] + [
-        (x[0], y[0]) for x, y in zip(*(groundtruth))
-    ]
-    print(mode, examples, queries, groundtruth, sep="\n")
+def main(mode, examples, queries, groundtruth):
+
+
+    rw = ReportWriter()
     scorer = TableScorer()
 
     if mode is ModeArgs.WEBPAGE:
-        args = WebPageRetrieval(
-            resource_filter=TauMatchFilter(2),
-            evaluation=BasicEvaluator(),
-            reduction=NielandtReducer(),
-            induction=NielandtInduction(),
-        ).run(examples, queries)
+        with rw.start_timer("Answer Retrieval"):
+            args = WebPageRetrieval().run(examples, queries)
     elif mode is ModeArgs.WEBTABLE:
-        args = WebTableRetrieval().run(examples, queries)
+        with rw.start_timer("Answer Retrieval"):
+            args = WebTableRetrieval().run(examples, queries)
     else:
         return
 
-    answerList = scorer.expectionMaximization(*args)
+    with rw.start_timer("Expectation Maximization"):
+        answerList = scorer.expectionMaximization(*args)
 
-    total, correct = 0, 0
-    overview = DataFrame(columns=["X", "Y", "Y (gt)", "Diff", "Score"])
-    sm = SequenceMatcher()
-    for answer in answerList:
-        total += 1
-        y_gt = [y for x, y in groundtruth if x == answer.X]
-        if not y_gt:
-            continue
-        y_gt = y_gt[0]
-
-        sm.set_seqs(answer.Y or "", y_gt or "")
-        overview = overview.append(
-            {
-                "X": answer.X,
-                "Y": answer.Y,
-                "Y (gt)": y_gt,
-                "Diff": sm.ratio(),
-                "Score": float(answer.score),
-            },
-            ignore_index=True,
-        )
-        if answer.Y == y_gt:
-            correct += 1
-    print(overview.sort_values(["X", "Score"], ascending=[True, False]))
-    print(correct / total)
-    overview = overview.loc[overview.groupby("X")["Score"].idxmax()]
-    correct = 0
-    for idx, (x,  y, y_gt, diff, score) in overview.iterrows():
-        correct += y == y_gt
-
-    print(overview)
-    print(correct / total)
+    rw.write_answer(answerList, groundtruth, examples)
 
 
 if __name__ == "__main__":
-    main()
+    args = parse_args()
+    try:
+        main(*args)
+    except Exception as e:
+        logging.exception("")

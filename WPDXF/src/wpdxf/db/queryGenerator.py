@@ -1,6 +1,8 @@
+import logging
 from collections import defaultdict
 from typing import List, Set, Tuple
 
+import psycopg2
 from wpdxf.wrapping.objects.pairs import Example, Pair, Query
 
 __SESSION_TYPES__ = ("postgres",)  # ("postgres", "vertica") "vertica" deprecated
@@ -28,13 +30,12 @@ class QueryExecutor:
 
     def get_uris_for(self, examples: List[Example], queries: List[Query]):
         def remove_unresolved_examples():
-            for token in self.unknown_tokens:
-                for example in examples.copy():
-                    if token in example.tokens():
-                        examples.remove(example)
-                for query in queries.copy():
-                    if token in query.tokens():
-                        queries.remove(query)
+            for example in examples.copy():
+                if example.tokens() & self.unknown_tokens:
+                    examples.remove(example)
+            for query in queries.copy():
+                if query.tokens() & self.unknown_tokens:
+                    queries.remove(query)
 
         def get_matches(pairs):
             matches = defaultdict(list)
@@ -79,11 +80,14 @@ class QueryExecutor:
 
     def query_uris_for_pair(self, pair: Pair):
         def query(tokens: List[Tuple[str, int]]):
+            if not tokens:
+                return set()
+                
             interval = ", ".join([f"%({t})s" for t, _ in tokens])
             stmt = f"SELECT tokenid, position, uriid FROM token_uri_mapping WHERE tokenid IN ({interval}) ORDER BY uriid"
             with self.session.execute(stmt, self.token_dict) as cur:
                 filtered_result = self.filter_result(cur, tokens)
-                # print(cur.query)
+                # print(cur.query, self.token_dict)
             return filtered_result
 
         uris = query(pair.tok_inp)

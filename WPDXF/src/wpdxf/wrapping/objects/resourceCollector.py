@@ -1,5 +1,6 @@
 from typing import Dict, List, Set, Tuple
 
+from wpdxf.utils.report import ReportWriter
 from wpdxf.wrapping.objects.pairs import Example, Query
 from wpdxf.wrapping.tree.uritree import URITree
 
@@ -10,8 +11,16 @@ class ResourceCollector:
         self.resource_filter = resource_filter
 
     def collect(self, examples: List[Example], queries: List[Query]):
-        uris = self.query_executor.get_uris_for(examples, queries)
-        return group_uris(uris, self.resource_filter)
+        rw = ReportWriter()
+        with rw.start_timer("Query Execution"):
+            uris = self.query_executor.get_uris_for(examples, queries)
+        rw.write_query_result(uris)
+
+        with rw.start_timer("Group URIs"):
+            uri_groups, forest = group_uris(uris, self.resource_filter)
+        rw.write_uri_groups(forest)
+
+        return uri_groups
 
 
 def group_uris(
@@ -37,10 +46,4 @@ def group_uris(
         groups.extend(filter_result)
         if filter_result:
             filtered_forest.append(tree)
-
-    print(
-        f"Grouping of webpages resulted in {len(forest)} trees, of which {len(filtered_forest)} trees are considered as relevant:"
-    )
-    print("\n".join([str(tree) for tree in filtered_forest]))
-
-    return [(t.path(), [l.uri for l in t.leaves()]) for t in groups]
+    return [(t.path(), [l.uri for l in t.leaves()]) for t in groups], filtered_forest

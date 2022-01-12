@@ -1,35 +1,39 @@
 from dataXFormer.data.Answer import Answer
-from dataXFormer.data.DBUtil import DBUtil, getDBUtil
+from dataXFormer.data.DBUtil import getDBUtil
 
 from wpdxf.db.queryGenerator import QueryExecutor
+from wpdxf.wrapping.models.basic.evaluate import BasicEvaluator
+from wpdxf.wrapping.models.nielandt.induce import NielandtInduction
+from wpdxf.wrapping.models.nielandt.reduce import NielandtReducer
+from wpdxf.wrapping.tree.filter import TauMatchFilter
 from wpdxf.wrapping.wrapper import wrap
 
 
 class WebPageRetrieval:
-    def __init__(self, resource_filter, evaluation, reduction, induction) -> None:
+    def __init__(self) -> None:
         self.query_executor = QueryExecutor()
 
-        self.resource_filter = resource_filter
-        self.evaluation = evaluation
-        self.reduction = reduction
-        self.induction = induction
+        self.resource_filter = TauMatchFilter
+        self.evaluation = BasicEvaluator()
+        self.reduction = NielandtReducer()
+        self.induction = NielandtInduction()
 
-    def run(self, examples, queries):
-        examples = list(zip([v[0] for v in examples[0]], [v[0] for v in examples[1]]))
-        queries = [v[0] for v in queries[0]]
+    def run(self, examples, queries, tau=2):
+        resource_filter = self.resource_filter(tau)
+
+        # examples = list(zip([v[0] for v in examples[0]], [v[0] for v in examples[1]]))
+        examples = [(x[0], y[0]) for x, y in examples]
+        queries = [v[0] for (v,) in queries]
+
         tables = wrap(
             examples,
             queries,
             self.query_executor,
-            self.resource_filter,
+            resource_filter,
             self.evaluation,
             self.reduction,
             self.induction,
         )
-        for key, table in tables.items():
-            print(key)
-            for row in table:
-                print(row)
 
         reversedQS = {}
         for key, table in tables.items():
@@ -54,12 +58,11 @@ class WebPageRetrieval:
 
 
 class WebTableRetrieval:
-    def run(self, examples, queries):
+    def run(self, examples, queries, tau=2):
         from dataXFormer.webtableindexer.Tokenizer import Tokenizer
         from dataXFormer.webtables.TableScore import TableScorer
         from dataXFormer.webtables.Transformer import DirectTransformer
 
-        tau = 2
         tableLimit = None
 
         tokenizer = Tokenizer()
@@ -67,20 +70,12 @@ class WebTableRetrieval:
         dt = DirectTransformer()
         scorer = TableScorer()
 
-        def _transform(l: list):
-            return [tokenizer.tokenize(x[0]) for x in l]
+        def _transform(l: list, idx: int):
+            return [tokenizer.tokenize(x[idx][0]) for x in l]
 
-        ex_X = [x for (x,) in examples[0]]
-        ex_Y = [x for (x,) in examples[1]]
-        qu_X = [x for (x,) in queries[0]]
-
-        XList = [*map(tokenizer.tokenize, ex_X)]
-        Y = [*map(tokenizer.tokenize, ex_Y)]
-        Q = [*map(tokenizer.tokenize, qu_X)]
-
-        XList_map = dict(zip(XList, ex_X))
-        Y_map = dict(zip(Y, ex_Y))
-        Q_map = dict(zip(Q, qu_X))
+        XList = _transform(examples, 0)
+        Y = _transform(examples, 1)
+        Q = _transform(queries, 0)
 
         qs = dbUtil.queryWebTables(XList, Y, tau)
 
@@ -89,9 +84,10 @@ class WebTableRetrieval:
             queriedTableList = queriedTableList[:tableLimit]
             qs = [x for x in qs if x[0] in queriedTableList]
 
-        reversedQS = self.reverseQuery(
-            XList, Y, queriedTableList
-        )  # dbUtil.reverseQuery(XList, Y, queriedTableList)
+        if queriedTableList:
+            reversedQS = dbUtil.reverseQuery(XList, Y, queriedTableList)
+        else:
+            reversedQS = {}
 
         valid = dbUtil.findValidTable(XList, Y)
         validTable = dt.validateTable(qs, valid)
@@ -99,17 +95,14 @@ class WebTableRetrieval:
         qs = [x for x in qs if x[0] in validTable]
 
         answerList, _ = dt.transform(XList, Y, Q, reversedQS, queriedTableList)
-        for aw in answerList:
-            aw.X = Q_map.get(aw.X, aw.X)
-
         exampleAnswerList = scorer.exampleListToAnswer([*zip(XList, Y)], reversedQS)
-        for ex in exampleAnswerList:
-            ex.X = XList_map.get(ex.X, ex.X)
-            ex.Y = Y_map.get(ex.Y, ex.Y)
 
         return exampleAnswerList, answerList, Q, reversedQS
 
     def reverseQuery(self, XList, Y, tidList):
+        if not tidList:
+            return {}
+
         import json
 
         dbUtil = getDBUtil()
