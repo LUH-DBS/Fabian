@@ -1,3 +1,4 @@
+from wpdxf.utils.report import ReportWriter
 from wpdxf.wrapping.objects.pairs import Example, Query
 from wpdxf.wrapping.objects.resource import Resource
 from wpdxf.wrapping.objects.resourceCollector import ResourceCollector
@@ -6,9 +7,10 @@ from wpdxf.wrapping.objects.resourceCollector import ResourceCollector
 def wrap(
     examples, queries, query_executor, resource_filter, evaluator, reducer, induction
 ):
+    rw = ReportWriter()
+
     examples = [Example(i, *ex) for i, ex in enumerate(examples)]
     queries = [Query(i + len(examples), q) for i, q in enumerate(queries)]
-    pairs = examples + queries
 
     print("Collecting Resources")
     resources = ResourceCollector(query_executor, resource_filter).collect(
@@ -18,26 +20,46 @@ def wrap(
 
     tables = {}
     done = False
+    rw.start_timer("Full Evaluation")
     for i in range(evaluator.TOTAL_EVALS):
         for _resource in resources:
             resource = Resource(*_resource)
 
-            if not prepare_resource(
-                resource,
-                evaluator,
-                reducer,
-                resource_filter,
-                examples,
-                queries,
-                eval_type=i,
-            ):
+            with rw.start_timer("Eval0: " + resource.id):
+                evaluator.eval_initial(resource, examples, queries, i)
+                do_continue = not resource_filter.filter(
+                    resource.examples(), resource.queries()
+                )
+            rw.append_resource_info(
+                "Initial Evaluation: " + resource.id, resource.info()
+            )
+            if do_continue:
                 continue
 
-            while True:
-                induction.induce(resource, examples)
-                # print(resource.out_xpath.as_xpath(abs_start_path="$input"))
+            with rw.start_timer("Red0: " + resource.id):
+                reducer.reduce_ambiguity(resource)
+                do_continue = not resource_filter.filter(
+                    resource.examples(), resource.queries()
+                )
+            rw.append_resource_info("Reduce Ambiguity: " + resource.id, resource.info())
+            if do_continue:
+                continue
 
-                table = evaluator.evaluate_query(resource, examples, queries)
+            iteration = 0
+            while True:
+                iteration += 1
+                # Wrapper Induction
+                with rw.start_timer(f"Induction ({iteration}) {resource.id}"):
+                    induction.induce(resource, examples)
+                rw.append_resource_info(
+                    f"Induction ({iteration}): " + resource.id, resource.info()
+                )
+
+                # Wrapper evaluation
+                with rw.start_timer(f"Eval ({iteration}) {resource.id}"):
+                    table = evaluator.evaluate_query(resource, examples, queries)
+                rw.append_query_evaluation(f"{iteration} - {resource.id}", table)
+
                 any_result = any(len(val) == 1 for val in table.values())
                 if any_result:
                     table = set(
@@ -50,10 +72,15 @@ def wrap(
                     done = True
                     break
                 else:
-                    reducer.reduce(resource)
-                    if resource_filter.filter(resource.examples(), set()):
-                        continue
-                    else:
+                    with rw.start_timer(f"Red ({iteration}) {resource.id}"):
+                        reducer.reduce(resource)
+                        do_continue = not resource_filter.filter(
+                            resource.examples(), resource.queries()
+                        )
+                    rw.append_resource_info(
+                        f"Red ({iteration}) {resource.id}", resource.info()
+                    )
+                    if do_continue:
                         skip_resource = True
                         break
 
@@ -62,6 +89,8 @@ def wrap(
             tables[resource.id] = table
         if done:
             break
+
+    rw.end_timer()
     return tables
 
 
@@ -69,93 +98,9 @@ def prepare_resource(
     resource, evaluator, reducer, resource_filter, examples, queries, eval_type
 ):
     evaluator.eval_initial(resource, examples, queries, eval_type)
-    if not resource_filter.filter(resource.examples(), set()):
+    if not resource_filter.filter(resource.examples(), resource.queries()):
         return False
     reducer.reduce_ambiguity(resource)
-    if not resource_filter.filter(resource.examples(), set()):
+    if not resource_filter.filter(resource.examples(), resource.queries()):
         return False
     return True
-
-
-# def wrap(
-#     examples, queries, resource_filter, evaluator, reducer, induction, candidates=None
-# ):
-#     # queries_original = queries
-#     # examples = [Example(i, *vals) for i, vals in enumerate(examples)]
-#     # off = len(examples)
-#     # queries = [Query(i + off, *vals) for i, vals in enumerate(queries)]
-#     print("Retrieve web pages (candidates)...")
-#     candidates = candidates or get_uris_for(examples, queries)
-
-#     print(f"Retrieved candidates (total: {len(candidates)}):")
-#     print(
-#         "\n".join(
-#             [f"{uri}: {matches}" for uri, matches in list(candidates.items())[:20]]
-#         ),
-#         "\n",
-#     )
-
-#     resource_groups = group_uris(candidates, resource_filter)
-#     print(
-#         f"Retrieval results in {len(resource_groups)} groups: {[id for id, _ in resource_groups[:20]]}"
-#     )
-#     wrap_result = []
-#     done = False
-#     for i in range(evaluator.TOTAL_EVALS):
-#         if done:
-#             break
-#         for resource in resource_groups:
-#             resource = Resource(*resource)
-#             evaluator.eval_initial(resource, examples, queries, i)
-#             if not resource_filter.filter(
-#                 resource.matched_examples(), resource.matched_queries()
-#             ):
-#                 print("Resource dropped due to bad initialization")
-#                 continue
-#             else:
-#                 done = True
-
-#             has_output = False
-#             while not has_output:
-#                 has_output = True
-#                 reducer.reduce(resource)
-#                 if not resource_filter.filter(
-#                     resource.matched_examples(), resource.matched_queries()
-#                 ):
-#                     continue
-
-#                 induction.induce(resource, examples)
-#                 # evaluate is not necessary
-#                 evaluator.evaluate(resource, examples)
-
-#                 print(f"Resulting resource:")
-#                 q_dict = evaluator.evaluate_query(resource, queries=queries)
-#                 query_results = dict(queries_original)
-
-#                 overfull_cnt = len(query_results)
-#                 empty_cnt = len(query_results)
-#                 for q, vals in q_dict.items():
-#                     if len(vals) >= 1:
-#                         empty_cnt -= 1
-#                     if len(vals) <= 1:
-#                         overfull_cnt -= 1
-#                     if len(vals) == 1:
-#                         query_results[q.inp] = vals[0]
-#                 if overfull_cnt > 2:
-#                     print("OVERFULL")
-#                     has_output = False
-#                     continue
-#                 if empty_cnt > 2:
-#                     print("EMPTY")
-#                     continue
-
-#                 wrap_result.append(
-#                     {
-#                         "resourceID": resource.id,
-#                         "rel_xpath": resource.out_xpath.as_xpath(
-#                             abs_start_path="$input"
-#                         ),
-#                         "mapping": query_results,
-#                     }
-#                 )
-#     return wrap_result
