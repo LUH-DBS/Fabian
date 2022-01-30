@@ -84,8 +84,11 @@ class QueryExecutor:
                 return set()
                 
             interval = ", ".join([f"%({t})s" for t, _ in tokens])
-            stmt = f"SELECT tokenid, position, uriid FROM token_uri_mapping WHERE tokenid IN ({interval}) ORDER BY uriid"
-            with self.session.execute(stmt, self.token_dict) as cur:
+            stmt = f"SELECT tokenid, position, uriid FROM (SELECT tokenid, position, uriid, count(*) over (PARTITION BY uriid) as cnt FROM token_uri_mapping WHERE tokenid IN ({interval})) T WHERE cnt >= %(__len)s::integer ORDER BY uriid, position"
+
+            exec_dict = {'__len':len(tokens)}
+            exec_dict.update(self.token_dict)
+            with self.session.execute(stmt, exec_dict) as cur:
                 filtered_result = self.filter_result(cur, tokens)
                 # print(cur.query, self.token_dict)
             return filtered_result
@@ -113,7 +116,7 @@ class QueryExecutor:
 
         def yield_window(partition: list, window_size: int):
             if len(partition) < window_size:
-                return False
+                return
             for i in range(len(partition) - window_size + 1):
                 yield partition[i : i + window_size]
 
@@ -131,7 +134,7 @@ class QueryExecutor:
         result = set()
         tokens = [(self.token_dict[token], pos) for token, pos in tokens]
         for key, partition in yield_partition(cursor):
-            partition.sort(key=lambda x: x[-1])
+            #partition.sort(key=lambda x: x[-1]) # DB Response is already sorted!
             if sliding_window_filter(partition, tokens):
                 result.add(key)
         return result

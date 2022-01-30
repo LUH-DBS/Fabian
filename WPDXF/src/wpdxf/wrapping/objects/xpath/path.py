@@ -87,6 +87,7 @@ class RelativeXPath(VRelativeXPath):
         start_node,
         end_node,
         common_path: Tuple[XPathNode] = None,
+        root_node = None
     ) -> None:
         super().__init__(
             start_path=start_path, end_path=end_path, common_path=common_path
@@ -94,6 +95,7 @@ class RelativeXPath(VRelativeXPath):
 
         self.start_node = start_node
         self.end_node = end_node
+        self.root_node = root_node
 
     def __str__(self) -> str:
         return self.as_xpath()
@@ -103,7 +105,7 @@ class RelativeXPath(VRelativeXPath):
         start_path = []
         end_path = [XPathNode.new_instance(end_node)]
 
-        root_element = end_node
+        root_node = end_node
 
         if start_node != end_node:
             start_elements = nodelist(start_node)
@@ -116,7 +118,7 @@ class RelativeXPath(VRelativeXPath):
             else:
                 idx += 1
 
-            root_element = end_elements[idx - 1]
+            root_node = end_elements[idx - 1]
 
             start_elements = tuple(start_elements[idx:])
             end_elements = tuple(end_elements[idx - 1 :])
@@ -129,6 +131,7 @@ class RelativeXPath(VRelativeXPath):
             end_path=tuple(end_path),
             start_node=start_node,
             end_node=end_node,
+            root_node=root_node
         )
 
         eval_out = start_node.xpath(str(relativeXPath))

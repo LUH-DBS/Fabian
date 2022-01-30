@@ -9,7 +9,7 @@ from pandas import DataFrame, read_csv
 
 from DataXFormer.webtableindexer.Tokenizer import Tokenizer
 from DataXFormer.webtables.TableScore import TableScorer
-from wpdxf.tableretieval import WebPageRetrieval, WebTableRetrieval
+from wpdxf.tableretieval import FlashExtractRetrieval, WebPageRetrieval, WebTableRetrieval
 from wpdxf.utils.report import ReportWriter
 
 BENCHMARKS = "../data/benchmarks/"
@@ -142,6 +142,9 @@ def main(mode, examples, queries, groundtruth):
     elif mode is ModeArgs.WEBTABLE:
         with rw.start_timer("Answer Retrieval"):
             args = WebTableRetrieval().run(examples, queries)
+    elif mode is ModeArgs.FLASHEXTRACT:
+        with rw.start_timer("Answer Retrieval"):
+            args = FlashExtractRetrieval().run(examples, queries)
     else:
         return
 
@@ -153,7 +156,8 @@ def main(mode, examples, queries, groundtruth):
 
 if __name__ == "__main__":
     args = parse_args()
-    try:
-        main(*args)
-    except Exception as e:
-        logging.exception("")
+    main(*args)
+    # try:
+    #     main(*args)
+    # except Exception as e:
+    #     logging.exception("")
