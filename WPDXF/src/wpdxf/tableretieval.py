@@ -1,5 +1,7 @@
 from DataXFormer.data.Answer import Answer
-from DataXFormer.data.DBUtil import getDBUtil
+from DataXFormer.data.DBUtil import DBUtil
+
+
 
 from wpdxf.db.queryGenerator import QueryExecutor
 from wpdxf.wrapping.models.basic.evaluate import BasicEvaluator
@@ -66,7 +68,7 @@ class WebTableRetrieval:
         tableLimit = None
 
         tokenizer = Tokenizer()
-        dbUtil = getDBUtil("postgres")
+        dbUtil = DBUtil("postgres")
         dt = DirectTransformer()
         scorer = TableScorer()
 
@@ -99,55 +101,9 @@ class WebTableRetrieval:
 
         return exampleAnswerList, answerList, Q, reversedQS
 
-    def reverseQuery(self, XList, Y, tidList):
-        if not tidList:
-            return {}
-
-        import json
-
-        dbUtil = getDBUtil()
-
-        qString = "SELECT id, content, confidence, openrank FROM tables_tokenized_full WHERE id IN {}"
-
-        conn = dbUtil.getDBConn("postgres")
-        cur = conn.cursor()
-        if len(tidList) == 1:
-            qString = qString.format("(" + str(tidList[0]) + ")")
-        else:
-            qString = qString.format(tuple(tidList))
-
-        cur.execute(qString)
-
-        tableJSON = {}
-        round1Fail = 0
-        round2Fail = 0
-        for _id, content, confidence, openrank in cur:
-            item_dict = {}
-
-            item_dict["content"] = []
-            try:
-                tupleJSON = json.loads(content)
-            except json.decoder.JSONDecodeError:
-                print("round 1 fail" + str(_id))
-                round1Fail += 1
-                try:
-                    tupleJSON = json.loads(dbUtil.__jsonClean(content))
-                except json.decoder.JSONDecodeError:
-                    print("round 2 fail" + str(_id))
-                    round2Fail += 1
-                    continue
-
-            for tupleT in tupleJSON["tuples"]:
-                cellList = tuple([cell.get("value", "") for cell in tupleT["cells"]])
-                item_dict["content"].append(cellList)
-
-            item_dict["confidence"] = confidence
-            item_dict["openrank"] = max(openrank / 100.0, 0.0)
-            item_dict["colid"] = [*range(len(cellList))]
-
-            tableJSON[_id] = item_dict
-
-        cur.close()
-        conn.close()
-
-        return tableJSON
+class FlashExtractRetrieval(WebPageRetrieval):
+    def __init__(self) -> None:
+        super().__init__()
+        from flashextract.synthesize import ExtractionProgSynthesizer#, FlashExtractReduction
+        self.induction = ExtractionProgSynthesizer()
+        #self.reduction = FlashExtractReduction()
