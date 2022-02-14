@@ -2,7 +2,42 @@ from typing import Dict, List, Set, Tuple
 from urllib.parse import urlsplit
 
 
+def uri_to_list(uri: str):
+    us = urlsplit(uri)
+    path = us.path.split("/")[1:]
+    if us.query:
+        path.append(us.query)
+    if us.fragment:
+        path.append(us.fragment)
+    return us.netloc, path
+
+
 class URITree:
+    def __init__(self) -> None:
+        self.root_nodes = {}
+
+    def __str__(self) -> str:
+        return "\n".join(str(node) for node in self.root_nodes.values())
+
+    def add_uri(self, uri: str, ex_matches, q_matches, allow_new=True):
+        host, path = uri_to_list(uri)
+        if host not in self.root_nodes:
+            if not allow_new:
+                return
+            root = URITreeNode(host, None)
+            self.root_nodes[host] = root
+        else:
+            root = self.root_nodes[host]
+        root.add_path(*path, ex_matches=ex_matches, q_matches=q_matches, leaf=uri)
+        return root
+
+    def reduce(self, tau):
+        self.root_nodes = {
+            k: v for k, v in self.root_nodes.items() if len(v.ex_matches) >= tau
+        }
+
+
+class URITreeNode:
     def __init__(self, label, parent) -> None:
         self.label = label
         self.parent = parent
@@ -66,7 +101,7 @@ class URITree:
 
             tree = forest.get(u_split.netloc)
             if tree is None:
-                tree = URITree(u_split.netloc, None)
+                tree = URITreeNode(u_split.netloc, None)
                 forest[u_split.netloc] = tree
 
             tree.add_path(*path, ex_matches=ex_matches, q_matches=q_matches, leaf=uri)
@@ -83,11 +118,11 @@ class URITree:
             label (str): Unique label for a (new) child of self.
 
         Returns:
-            URITree: The child with value 'label'.
+            URITreeNode: The child with value 'label'.
         """
         if label in self.children:
             return self.children[label]
-        child = URITree(label, self)
+        child = URITreeNode(label, self)
         self.children[label] = child
         return child
 
@@ -107,8 +142,8 @@ class URITree:
             node.ex_matches |= set(ex_matches)
             node.q_matches |= set(q_matches)
             if args:
-                node = node.add_child(args[0])
-                args = args[1:]
+                arg0, *args = args
+                node = node.add_child(arg0)
             else:
                 node.uri = leaf
                 node = None
@@ -130,10 +165,10 @@ class URITree:
         Returns the first node on each path where the 'filter_func' evaluates to True.
 
         Args:
-            filter_func : A method that consumes a URITree and returns a bool.
+            filter_func : A method that consumes a URITreeNode and returns a bool.
 
         Returns:
-            List[URITree]: All "first" nodes where 'filter_func' evaluates to True.
+            List[URITreeNode]: All "first" nodes where 'filter_func' evaluates to True.
         """
         result = []
         queue = [self]

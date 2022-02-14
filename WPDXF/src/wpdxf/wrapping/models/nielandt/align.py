@@ -9,6 +9,7 @@ from wpdxf.wrapping.objects.xpath.path import RelativeXPath, XPath
 
 def align(xpaths: List[XPath]) -> List[XPath]:
     # Choose pair of xpaths with minimal distance between each other.
+    xpaths = xpaths.copy()
     min_cost = (np.array([[np.inf]]),)
     for i, xpath0 in enumerate(xpaths):
         for xpath1 in xpaths[i + 1 :]:
@@ -51,12 +52,14 @@ def align_new_path(
     off_0, off_1 = 0, 0
     for step_idx0, step_idx1, action in actions:
         if action is EDIT_ACTIONS.INSERT_0:
-            xpath_0.insert(off_0 + step_idx0, XPathNode.new_self())
+            xpath_0.insert(off_0 + step_idx0, XPathNode.self_node())
             off_0 += 1
         elif action is EDIT_ACTIONS.INSERT_1:
             for xpath in xpaths:
-                xpath.insert(off_1 + step_idx1, XPathNode.new_self())
+                xpath.insert(off_1 + step_idx1, XPathNode.self_node())
             off_1 += 1
 
-    assert len(xpaths[0]) == len(xpath_0), f"{','.join([str(xp) for xp in xpaths])}\n{xpath_0}\n{actions}"
+    assert len(xpaths[0]) == len(
+        xpath_0
+    ), f"{','.join([str(xp) for xp in xpaths])}\n{xpath_0}\n{actions}"
     return xpaths + [xpath_0]

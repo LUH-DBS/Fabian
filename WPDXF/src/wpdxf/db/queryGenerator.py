@@ -1,11 +1,14 @@
 import logging
-from collections import defaultdict
-from typing import List, Set, Tuple
+from itertools import chain
+from typing import Iterator, List, Set
 
-import psycopg2
-from wpdxf.wrapping.objects.pairs import Example, Pair, Query
+from wpdxf.wrapping.objects.pairs import Example, Pair
 
 __SESSION_TYPES__ = ("postgres",)  # ("postgres", "vertica") "vertica" deprecated
+
+
+def _escape_var(variable):
+    return f"%({variable})s"
 
 
 def _tuple_interval(t):
@@ -25,116 +28,83 @@ class QueryExecutor:
         #     session = VerticaDBSession()
 
         self.token_dict = {}
-        self.uriid_dict = {}
         self.unknown_tokens = set()
 
-    def get_uris_for(self, examples: List[Example], queries: List[Query]):
-        def remove_unresolved_examples():
-            for example in examples.copy():
-                if example.tokens() & self.unknown_tokens:
-                    examples.remove(example)
-            for query in queries.copy():
-                if query.tokens() & self.unknown_tokens:
-                    queries.remove(query)
-
-        def get_matches(pairs):
-            matches = defaultdict(list)
-            for pair in pairs:
-                for uri in self.query_uris_for_pair(pair):
-                    matches[uri].append(pair.id)
-            return matches
-
-        self.update_token_dict(examples + queries)
-        remove_unresolved_examples()
-
-        example_matches = get_matches(examples)
-        query_matches = get_matches(queries)
-
-        keys = set(example_matches) | set(query_matches)
-        self.update_uri_dict(keys)
-        matches = {}
-        for key in keys:
-            uri = self.uriid_dict[key]
-            matches[uri] = (example_matches[key], query_matches[key])
-        return matches
-
-    def update_token_dict(self, pairs: List[Pair]):
-        new_tokens = tuple(
-            set.union(*(pair.tokens() for pair in pairs)) - set(self.token_dict)
-        )
+    def update_token_dict(self, tokens: Set[str]):
+        new_tokens = tokens - set(self.token_dict)
         if not new_tokens:
             return
-        stmt = f"SELECT token, tokenid FROM tokens WHERE token IN ({_tuple_interval(new_tokens)})"
+        _interval = _tuple_interval(new_tokens)
+        stmt = f"SELECT token, tokenid FROM tokens WHERE token IN ({_interval})"
         with self.session.execute(stmt, tuple(new_tokens)) as cur:
             self.token_dict.update(dict(cur.fetchall()))
-        self.unknown_tokens |= set(new_tokens) - set(self.token_dict)
+        self.unknown_tokens |= new_tokens - set(self.token_dict)
+        return self.token_dict, self.unknown_tokens
 
-    def update_uri_dict(self, uriid_set: Set[int]):
-        new_uriids = tuple(uriid_set - set(self.uriid_dict))
-        if not new_uriids:
-            return
+    def query_pairs(self, pairs: List[Pair]):
+        def remove_unresolved_pairs():
+            for pair in pairs.copy():
+                if pair.tokens() & self.unknown_tokens:
+                    pairs.remove(pair)
 
-        stmt = f"SELECT uriid, uri FROM uris WHERE uriid IN ({_tuple_interval(new_uriids)})"
-        with self.session.execute(stmt, new_uriids) as cur:
-            self.uriid_dict.update(dict(cur.fetchall()))
+        all_tokens = set.union(*map(lambda x: x.tokens, pairs))
+        self.update_token_dict(all_tokens)
+        if self.unknown_tokens:
+            remove_unresolved_pairs()
+            all_tokens = set.union(*map(lambda x: x.tokens, pairs))
 
-    def query_uris_for_pair(self, pair: Pair):
-        def query(tokens: List[Tuple[str, int]]):
-            if not tokens:
-                return set()
-                
-            interval = ", ".join([f"%({t})s" for t, _ in tokens])
-            stmt = f"SELECT tokenid, position, uriid FROM (SELECT tokenid, position, uriid, count(*) over (PARTITION BY uriid) as cnt FROM token_uri_mapping WHERE tokenid IN ({interval})) T WHERE cnt >= %(__len)s::integer ORDER BY uriid, position"
+        return self.query_single_token_set(all_tokens)
 
-            exec_dict = {'__len':len(tokens)}
-            exec_dict.update(self.token_dict)
-            with self.session.execute(stmt, exec_dict) as cur:
-                filtered_result = self.filter_result(cur, tokens)
-                # print(cur.query, self.token_dict)
-            return filtered_result
+    def query_single_token_set(self, tokenset: Set[str]) -> Iterator:
+        if not tokenset:
+            return StopIteration
+        _where = " OR ".join(f"tokenid = {_escape_var(t)}" for t in tokenset)
+        stmt = f"""\
+SELECT tokenid, position, uri
+FROM (
+    SELECT tokenid, position, uriid 
+    FROM token_uri_mapping WHERE {_where} 
+    ORDER BY uriid, position
+) S1 JOIN uris USING(uriid)"""
+        with self.session.execute(stmt, self.token_dict) as cur:
+            # print("Single Token Query\n", cur.query.decode())
+            for item in self.yield_partition(cur):
+                yield item
 
-        uris = query(pair.tok_inp)
-        if isinstance(pair, Example):
-            uris &= query(pair.tok_out)
+    def query_multi_token_set(self, tokenset: Set[str]) -> Iterator:
+        if not tokenset:
+            return StopIteration
+        _where = " OR ".join(f"tokenid = {_escape_var(t)}" for t in tokenset)
+        stmt = f"""\
+SELECT tokenid, position, uri
+FROM (
+    SELECT tokenid, position, uriid, 
+        LAG(position) OVER w AS prevpos, 
+        LEAD(position) OVER w AS nextpos
+    FROM token_uri_mapping
+    WHERE {_where}
+    WINDOW w AS (PARTITION BY uriid ORDER BY position)
+) S JOIN uris USING(uriid)
+WHERE prevpos = position - 1
+OR nextpos = position + 1
+ORDER BY uriid, position"""
+        with self.session.execute(stmt, self.token_dict) as cur:
+            # print("Multi Token Query\n",cur.query.decode())
+            for item in self.yield_partition(cur):
+                yield item
 
-        return uris
-
-    def filter_result(self, cursor, tokens: List[Tuple[str, int]]) -> Set[int]:
-        def yield_partition(cursor):
-            key = None
-            partition = []
-            for row in cursor:
-                if key is None:  # Initial value
-                    key = row[-1]
-                    partition.append(row[:-1])
-                elif key != row[-1]:  # New partition
-                    yield key, partition
-                    key = row[-1]
-                    partition = [row[:-1]]
-                else:  # Same partition
-                    partition.append(row[:-1])
-
-        def yield_window(partition: list, window_size: int):
-            if len(partition) < window_size:
-                return
-            for i in range(len(partition) - window_size + 1):
-                yield partition[i : i + window_size]
-
-        def sliding_window_filter(partition: list, tokens: list) -> bool:
-            for window in yield_window(partition, len(tokens)):
-                w_position_0 = window[0][1]
-                if all(
-                    window[i] == (tokenid, w_position_0 + offset)
-                    for i, (tokenid, offset) in enumerate(tokens)
-                ):
-                    return True
-
-            return False
-
-        result = set()
-        tokens = [(self.token_dict[token], pos) for token, pos in tokens]
-        for key, partition in yield_partition(cursor):
-            #partition.sort(key=lambda x: x[-1]) # DB Response is already sorted!
-            if sliding_window_filter(partition, tokens):
-                result.add(key)
-        return result
+    def yield_partition(self, cursor):
+        key = None
+        partition = []
+        for i, row in enumerate(cursor):
+            if key is None:  # Initial value
+                key = row[-1]
+                partition.append(row[:-1])
+            elif key != row[-1]:  # New partition
+                yield key, partition
+                key = row[-1]
+                partition = [row[:-1]]
+            else:  # Same partition
+                partition.append(row[:-1])
+        yield key, partition
+        print("Total rows:", i)

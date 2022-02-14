@@ -1,60 +1,67 @@
+from dataclasses import InitVar, dataclass, field
+from typing import Set, Tuple
+
 from wpdxf.corpus.parsers.textparser import TextParser
 
 
+@dataclass(frozen=True)
 class Pair:
-    _tp = TextParser()
+    inp: str
+    out: str
 
-    def __init__(self, id, inp, out) -> None:
-        self.id = id
+    tp: InitVar[TextParser] = TextParser()
 
-        self.inp = inp
-        self.out = out
+    tok_inp: Tuple[Tuple[str, int], ...] = field(init=False, compare=False, repr=False)
+    tok_out: Tuple[Tuple[str, int], ...] = field(init=False, compare=False, repr=False)
+    tokens: Set[str] = field(
+        init=False, compare=False, repr=False,
+    )
 
-        self.tok_inp = self._tp.tokenize_str(inp)
-        self.tok_out = self._tp.tokenize_str(out) if out else []
+    def __post_init__(self, tp):
+        object.__setattr__(self, "tok_inp", self.tp.tokenize_str(self.inp))
+        object.__setattr__(self, "tok_out", self.tp.tokenize_str(self.out))
+        object.__setattr__(
+            self, "tokens", set(t for t, _ in self.tok_inp + self.tok_out)
+        )
 
-    def __repr__(self) -> str:
-        return str(self.pair)
-
-    def __contains__(self, item) -> bool:
-        return item in self.tokens()
+    def __contains__(self, item: str) -> bool:
+        return item in self.tokens
 
     @property
-    def pair(self) -> tuple:
+    def pair(self) -> Tuple[str, str]:
         return (self.inp, self.out)
 
     @property
-    def tok(self) -> tuple:
+    def tok(self) -> Tuple[Tuple[str, int], Tuple[str, int]]:
         return (self.tok_inp, self.tok_out)
-
-    def tokens(self) -> set:
-        return set(t for t, _ in self.tok_inp + self.tok_out)
 
 
 class Example(Pair):
-    def __init__(self, id, inp, out) -> None:
+    def __init__(self, inp, out) -> None:
         if out is None:
             raise ValueError("The output of an example cannot be None.")
-        super().__init__(id, inp, out)
+        super().__init__(inp, out)
 
 
 class Query(Pair):
-    def __init__(self, id, inp, *args) -> None:
-        super().__init__(id, inp, None)
+    def __init__(self, inp, *args) -> None:
+        super().__init__(inp, None)
 
 
 if __name__ == "__main__":
-    e = Example(0, "This is a test input.", "This is the test output.")
+    e = Example("This is a test input.", "This is the test output.")
     print(e)
     print(e.tok)
     print(e.pair)
-    print(e.tokens())
+    print(e.tokens)
 
-    e = Query(0, "This is a test input.")
+    e = Query("This is a test input.")
+    e2 = Query("This is a test input.")
+    assert e == e2
     print(e)
     print(e.tok)
     print(e.pair)
-    print(e.tokens())
+    print(e.tokens)
 
     print("this" in e)
     print("input" in e)

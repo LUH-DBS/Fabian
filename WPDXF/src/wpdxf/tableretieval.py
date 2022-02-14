@@ -1,13 +1,12 @@
 from DataXFormer.data.Answer import Answer
 from DataXFormer.data.DBUtil import DBUtil
-
-
+from DataXFormer.webtableindexer.Tokenizer import Tokenizer
+from DataXFormer.webtables.TableScore import TableScorer
 
 from wpdxf.db.queryGenerator import QueryExecutor
 from wpdxf.wrapping.models.basic.evaluate import BasicEvaluator
 from wpdxf.wrapping.models.nielandt.induce import NielandtInduction
 from wpdxf.wrapping.models.nielandt.reduce import NielandtReducer
-from wpdxf.wrapping.tree.filter import TauMatchFilter
 from wpdxf.wrapping.wrapper import wrap
 
 
@@ -15,54 +14,55 @@ class WebPageRetrieval:
     def __init__(self) -> None:
         self.query_executor = QueryExecutor()
 
-        self.resource_filter = TauMatchFilter
         self.evaluation = BasicEvaluator()
         self.reduction = NielandtReducer()
         self.induction = NielandtInduction()
 
     def run(self, examples, queries, tau=2):
-        resource_filter = self.resource_filter(tau)
 
-        # examples = list(zip([v[0] for v in examples[0]], [v[0] for v in examples[1]]))
         examples = [(x[0], y[0]) for x, y in examples]
         queries = [v[0] for (v,) in queries]
-
         tables = wrap(
             examples,
             queries,
             self.query_executor,
-            resource_filter,
+            tau,
             self.evaluation,
             self.reduction,
             self.induction,
         )
 
+        tokenizer = Tokenizer()
+
         reversedQS = {}
         for key, table in tables.items():
+            table = [
+                (tokenizer.tokenize(inp), tokenizer.tokenize(out)) for inp, out in table
+            ]
             reversedQS[key] = {
-                "content": list(table),
+                "content": table,
                 "confidence": 0,
                 "openrank": 0,
                 "colid": [0, 1],
             }
 
-        EX = set([x for x, _ in examples])
-        Q = queries
+        Q = set(tokenizer.tokenize(q) for q in queries)
+        EX = set(
+            (tokenizer.tokenize(inp), tokenizer.tokenize(out)) for inp, out in examples
+        )
         exampleAnswerList = []
         answerList = []
-        for key, table in tables.items():
-            for x, y in table:
-                if x in EX:
-                    exampleAnswerList.append(Answer(x, y, key, isExample=True))
-                elif x in Q:
+        for key, values in reversedQS.items():
+            for x, y in values["content"]:
+                if x in Q:
                     answerList.append(Answer(x, y, key))
+                if (x, y) in EX:
+                    exampleAnswerList.append(Answer(x, y, key, isExample=True))
         return exampleAnswerList, answerList, Q, reversedQS
 
 
 class WebTableRetrieval:
     def run(self, examples, queries, tau=2):
-        from DataXFormer.webtableindexer.Tokenizer import Tokenizer
-        from DataXFormer.webtables.TableScore import TableScorer
         from DataXFormer.webtables.Transformer import DirectTransformer
 
         tableLimit = None
@@ -101,9 +101,13 @@ class WebTableRetrieval:
 
         return exampleAnswerList, answerList, Q, reversedQS
 
+
 class FlashExtractRetrieval(WebPageRetrieval):
     def __init__(self) -> None:
         super().__init__()
-        from flashextract.synthesize import ExtractionProgSynthesizer#, FlashExtractReduction
+        from flashextract.synthesize import \
+            ExtractionProgSynthesizer  # , FlashExtractReduction
+
         self.induction = ExtractionProgSynthesizer()
-        #self.reduction = FlashExtractReduction()
+        # self.reduction = FlashExtractReduction()
+

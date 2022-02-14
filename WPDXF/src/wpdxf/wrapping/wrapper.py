@@ -1,106 +1,109 @@
+from itertools import count
+from typing import Dict, List, Set, Tuple
+
 from wpdxf.utils.report import ReportWriter
-from wpdxf.wrapping.objects.pairs import Example, Query
+from wpdxf.wrapping.objects.pairs import Example, Pair, Query
 from wpdxf.wrapping.objects.resource import Resource
 from wpdxf.wrapping.objects.resourceCollector import ResourceCollector
 
 
-def wrap(
-    examples, queries, query_executor, resource_filter, evaluator, reducer, induction
-):
+def wrap(examples, queries, query_executor, tau, evaluator, reducer, induction):
     rw = ReportWriter()
 
-    examples = [Example(i, *ex) for i, ex in enumerate(examples)]
-    queries = [Query(i + len(examples), q) for i, q in enumerate(queries)]
+    def tau_filter(resource: Resource):
+        return len(resource.examples()) >= tau
+
+    examples = [*map(lambda x: Example(*x), examples)]
+    queries = [*map(Query, queries)]
 
     print("Collecting Resources")
-    resources = ResourceCollector(query_executor, resource_filter).collect(
-        examples, queries
-    )
+    resources = ResourceCollector(query_executor, tau).collect(examples, queries)
     print(f"Resulted in {len(resources)} resources")
 
     tables = {}
-    done = False
     rw.start_timer("Full Evaluation")
-    for i in range(evaluator.TOTAL_EVALS):
-        for _resource in resources:
-            resource = Resource(*_resource)
+    for _resource in resources:
+        resource = Resource(*_resource)
 
-            with rw.start_timer("Eval0: " + resource.id):
-                evaluator.eval_initial(resource, examples, queries, i)
-                do_continue = not resource_filter.filter(
-                    resource.examples(), resource.queries()
-                )
+        with rw.start_timer(f"Eval0: {resource}"):
+            evaluator.evaluate_initial(resource, examples, queries)
+        rw.append_resource_info(f"Initial Evaluation: {resource}", resource.info())
+
+        if not tau_filter(resource):
+            continue
+
+        with rw.start_timer(f"Red0: {resource}"):
+            reducer.reduce_ambiguity(resource)
+        rw.append_resource_info(f"Reduce Ambiguity: {resource}", resource.info())
+
+        if not tau_filter(resource):
+            continue
+
+        cnt = count()
+        while True:
+            # Wrapper Induction
+            iteration = next(cnt)
+            with rw.start_timer(f"Induction ({iteration}) {resource}"):
+                induction.induce(resource, examples)
             rw.append_resource_info(
-                "Initial Evaluation: " + resource.id, resource.info()
+                f"Induction ({iteration}): {resource}", resource.info()
             )
-            if do_continue:
-                continue
+            # Wrapper evaluation
+            with rw.start_timer(f"Eval ({iteration}) {resource}"):
+                evaluator.evaluate(resource)
 
-            with rw.start_timer("Red0: " + resource.id):
-                reducer.reduce_ambiguity(resource)
-                do_continue = not resource_filter.filter(
-                    resource.examples(), resource.queries()
-                )
-            rw.append_resource_info("Reduce Ambiguity: " + resource.id, resource.info())
-            if do_continue:
-                continue
+            table = create_table(resource, examples, queries)
+            rw.append_query_evaluation(f"{iteration} - {resource}", table)
 
-            iteration = 0
-            while True:
-                iteration += 1
-                # Wrapper Induction
-                with rw.start_timer(f"Induction ({iteration}) {resource.id}"):
-                    induction.induce(resource, examples)
-                rw.append_resource_info(
-                    f"Induction ({iteration}): " + resource.id, resource.info()
-                )
+            table = reduce_table(table)
+            if len([*filter(lambda x: x[1] is not None, table)]) >= tau:
+                skip_resource = False
+                break
 
-                # Wrapper evaluation
-                with rw.start_timer(f"Eval ({iteration}) {resource.id}"):
-                    table = evaluator.evaluate_query(resource, examples, queries)
-                rw.append_query_evaluation(f"{iteration} - {resource.id}", table)
+            with rw.start_timer(f"Red ({iteration}) {resource}"):
+                reducer.reduce(resource)
+            rw.append_resource_info(f"Red ({iteration}) {resource}", resource.info())
 
-                any_result = any(len(val) == 1 for val in table.values())
-                if any_result:
-                    table = set(
-                        [
-                            (p.inp, (v[0] if len(v) == 1 else None))
-                            for p, v in table.items()
-                        ]
-                    )
-                    skip_resource = False
-                    done = True
-                    break
-                else:
-                    with rw.start_timer(f"Red ({iteration}) {resource.id}"):
-                        reducer.reduce(resource)
-                        do_continue = not resource_filter.filter(
-                            resource.examples(), resource.queries()
-                        )
-                    rw.append_resource_info(
-                        f"Red ({iteration}) {resource.id}", resource.info()
-                    )
-                    if do_continue:
-                        skip_resource = True
-                        break
+            if not tau_filter(resource):
+                skip_resource = True
+                break
 
-            if skip_resource:
-                continue
-            tables[resource.id] = table
-        if done:
-            break
+        if skip_resource:
+            continue
+        tables[resource] = table
 
     rw.end_timer()
     return tables
 
 
-def prepare_resource(
-    resource, evaluator, reducer, resource_filter, examples, queries, eval_type
-):
-    evaluator.eval_initial(resource, examples, queries, eval_type)
-    if not resource_filter.filter(resource.examples(), resource.queries()):
-        return False
-    reducer.reduce_ambiguity(resource)
-    if not resource_filter.filter(resource.examples(), resource.queries()):
-        return False
-    return True
+def create_table(
+    resource: Resource, examples: List[Example], queries: List[Query]
+) -> Dict[str, Set[str]]:
+    res = {}
+
+    def _collect(item_dict: dict, items:list):
+        for pair in items:
+            if not pair in item_dict:
+                res[pair.inp] = set()
+            else:
+                res[pair.inp] = {
+                    "".join(out.itertext()) for _, out, _ in item_dict[pair]
+                }
+
+    _collect(resource.examples(), examples)
+    _collect(resource.queries(), queries)
+
+    return res
+
+
+def reduce_table(table: Dict[str, Set[str]]) -> List[Tuple[str, str]]:
+    res = []
+    for inp, outputs in table.items():
+        if len(outputs) == 1:
+            res.append((inp, outputs.pop()))
+        elif len(outputs) > 1:
+            for item in outputs:
+                if all(item in _item for _item in outputs):
+                    res.append((inp, outputs.pop()))
+                    break
+    return res

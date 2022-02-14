@@ -1,78 +1,45 @@
 from copy import deepcopy
-from typing import List, Set
+from typing import List, Set, Tuple
 
-from lxml.etree import ElementBase
+from lxml.etree import _Element
 from wpdxf.wrapping.objects.xpath.node import AXISNAMES, XPathNode
 from wpdxf.wrapping.objects.xpath.path import RelativeXPath, XPath, nodelist
 from wpdxf.wrapping.objects.xpath.predicate import (AttributePredicate,
-                                                    Conjunction, Disjunction,
                                                     Predicate)
 
 
-def preprocess_startpath(xpath_g: XPath, xpaths: List[RelativeXPath]):
+def preprocess(
+    xpath_g: XPath, element_pairs: List[Tuple[_Element, _Element]], prefix: XPath = None
+):
     result = []
 
     for i in range(len(xpath_g)):
         indicated_nodes = set()
         overflow_nodes = set()
 
+        # start_path remains unchanged for all pairs
         start_path = xpath_g[i + 1 :]
-        for xpath in xpaths:
-            common_path = xpath.common_path + xpath_g[:i]
-            end_path = xpath_g[i : i + 1]
+        start_path.insert(0, XPathNode.self_node())
+        start_path, _ = start_path.xpath()
 
-            xp = RelativeXPath(
-                common_path=common_path,
-                start_path=start_path,
-                start_node=xpath.start_node,
-                end_node=None,
-                end_path=end_path,
-            )
-            nodes = set(nodelist(xpath.start_node))
-            eval_out = set(xpath.start_node.xpath(str(xp)))
+        for c_element, e_element in element_pairs:
+            ind_xpath = e_element.getroottree().getpath(e_element)
 
-            # Add all indicated/overflow nodes.
-            indicated_nodes |= eval_out & nodes
-            overflow_nodes |= eval_out - nodes
-            # Remove (now indicated) overflow nodes,
-            # if they were added in an earlier iteration.
-            overflow_nodes -= indicated_nodes
+            # common_path must be a shallow copy for each element pair, as the end_node is appended.
+            common_path = xpath_g[:i]
+            if prefix:
+                common_path = prefix + common_path
 
-        # print("Indicated Nodes:")
-        # for n in indicated_nodes:
-        #     print(n, n.getroottree().getpath(n))
-        # print("Overflow Nodes:")
-        # for n in overflow_nodes:
-        #     print(n, n.getroottree().getpath(n))
-        result.append((indicated_nodes, overflow_nodes))
+            # end_node (end_node's predicate) changes for each pair,
+            # deepcopy avoids unintended manipulation of original data.
+            end_node = deepcopy(xpath_g[i])
+            end_node.add_predicate(left=start_path, right=ind_xpath)
 
-    return result
+            common_path.append(end_node)
+            xpath, cvars = common_path.xpath()
 
-
-def preprocess_fullpath(xpath_g: RelativeXPath, xpaths: List[RelativeXPath]):
-    result = []
-
-    max_range = len(xpath_g.full_path(abs_start_path="$input")[1])
-
-    for i in range(max_range):
-        indicated_nodes = set()
-        overflow_nodes = set()
-
-        for xpath in xpaths:
-            _, xpg = xpath_g.full_path(xpath.start_node)
-            start_path = xpg[i + 1 :]
-            common_path = xpath.common_path + xpg[:i]
-            end_path = xpg[i : i + 1]
-
-            xp = RelativeXPath(
-                common_path=common_path,
-                start_path=start_path,
-                start_node=xpath.end_node,
-                end_node=None,
-                end_path=end_path,
-            )
-            nodes = set(nodelist(xpath.end_node))
-            eval_out = set(xpath.end_node.xpath(str(xp)))
+            nodes = set(nodelist(end=e_element))
+            eval_out = set(c_element.xpath(xpath, **cvars))
 
             # Add all indicated/overflow nodes.
             indicated_nodes |= eval_out & nodes
@@ -81,12 +48,6 @@ def preprocess_fullpath(xpath_g: RelativeXPath, xpaths: List[RelativeXPath]):
             # if they were added in an earlier iteration.
             overflow_nodes -= indicated_nodes
 
-        # print("Indicated Nodes:")
-        # for n in indicated_nodes:
-        #     print(n, n.getroottree().getpath(n))
-        # print("Overflow Nodes:")
-        # for n in overflow_nodes:
-        #     print(n, n.getroottree().getpath(n))
         result.append((indicated_nodes, overflow_nodes))
 
     return result
@@ -100,9 +61,7 @@ def enrich(xpath: XPath, node_list: list):
 
 
 def enrich_step(
-    step: XPathNode,
-    indicated_nodes: Set[ElementBase],
-    overflow_nodes: Set[ElementBase],
+    step: XPathNode, indicated_nodes: Set[_Element], overflow_nodes: Set[_Element],
 ):
     for enrich_func in __ENRICHMENT_FUNC__:
         enrich_func(step, indicated_nodes, overflow_nodes)
@@ -112,8 +71,11 @@ def _preceding_sibling(step, indicated_nodes, overflow_nodes):
     # Collect tags of preceding siblings that occurs for all indicated nodes of a step,
     # but not for a single overflow node.
 
-    def collect(element: ElementBase):
+    def collect(element: _Element):
         return set(e.tag for e in element.xpath("preceding-sibling::*"))
+
+    if len(indicated_nodes) < 1:
+        return
 
     indicated_tags = set.intersection(*map(collect, indicated_nodes))
     overflow_tags = (
@@ -121,15 +83,19 @@ def _preceding_sibling(step, indicated_nodes, overflow_nodes):
     )
     common_tags = indicated_tags - overflow_tags
 
-    step.predicates.extend(
-        [Predicate(f"preceding-sibling::{tag}") for tag in common_tags]
-    )
+    print("Preceding Sibling:", common_tags)
+    [step.add_predicate(left=f"preceding-sibling::{tag}") for tag in common_tags]
 
 
 def _similar_attributes(step, indicated_nodes, overflow_nodes):
     # Find attributes that exist for all indicated nodes.
     # If the key-value pair is the same, check for equality.
     # Otherwise, check for key existance.
+    if len(indicated_nodes) < 1 or any(
+        not isinstance(node, _Element) for node in indicated_nodes
+    ):
+        return
+
     similar_attributes = []
 
     eq_keys = set.intersection(*(set(node.attrib) for node in indicated_nodes))
@@ -141,28 +107,51 @@ def _similar_attributes(step, indicated_nodes, overflow_nodes):
         else:
             similar_attributes.append((key, None))
 
-    step.predicates.extend(
-        AttributePredicate(left, right=right) for left, right in similar_attributes
-    )
+    print("Similar attributes:", similar_attributes)
+    [step.add_attribute(left, right=right) for left, right in similar_attributes]
 
 
 def _node_names(step, indicated_nodes, overflow_nodes):
     # Reduce the expressivity of an arbitrary 'node()' also '*'
     # by adding a disjunction of all indicated nodetests.
-    if not overflow_nodes:
+    if not overflow_nodes or any(
+        not isinstance(node, _Element) for node in indicated_nodes
+    ):
         return
 
     indicated_names = set(node.tag for node in indicated_nodes)
     overflow_names = set(node.tag for node in overflow_nodes)
     if not (indicated_names & overflow_names):
-        step.predicates.append(
-            Disjunction(Predicate(f"self::{nt}") for nt in indicated_names)
+        step.predicates.append([Predicate(f"self::{nt}" for nt in indicated_names)])
+    else:
+        # Integer check
+        indicated_int_nodes = list(
+            filter(
+                lambda n: n.xpath(
+                    "self::*[re:test(text(), '^\d+$')]",
+                    namespaces={"re": "http://exslt.org/regular-expressions"},
+                ),
+                indicated_nodes,
+            )
         )
-    # TODO: Integer check is ignored for now.
+        overflow_int_nodes = list(
+            filter(
+                lambda n: n.xpath(
+                    "self::*[re:test(text(), '^\d+$')]",
+                    namespaces={"re": "http://exslt.org/regular-expressions"},
+                ),
+                indicated_nodes,
+            )
+        )
+        if (
+            len(indicated_int_nodes) == len(indicated_nodes)
+            and len(overflow_int_nodes) == 0
+        ):
+            step.add_predicate("re:test(text(), '^\d+$')")
 
 
 def _close_neighbours(step, indicated_nodes, overflow_nodes):
-    def _collect(nodes: List[ElementBase], path: XPath):
+    def _collect(nodes: List[_Element], path: XPath):
         text_dict = None
         for node in nodes:
             neighbours = node.xpath(str(path))
@@ -193,9 +182,9 @@ def _close_neighbours(step, indicated_nodes, overflow_nodes):
     # Nephews:
     path = XPath(
         [
-            XPathNode.new_self(),
+            XPathNode.self_node(),
             XPathNode(axisname=AXISNAMES.PAR),
-            XPathNode(axisname=AXISNAMES.PSIB),
+            XPathNode(axisname=AXISNAMES.PSIB),  # PSIB
         ]
     )
     indicated_td = _collect(indicated_nodes, path)
@@ -210,14 +199,15 @@ def _close_neighbours(step, indicated_nodes, overflow_nodes):
         if len(indicated_td[key]) == 1:
             tag, position = list(indicated_td[key])[0]
             key_path[-2].nodetest = tag
-            key_path[-1].predicates.append(Predicate("position()", right=position))
-        step.predicates.append(Predicate(left=f"{key_path}='{key}'"))
+            key_path[-1].add_predicate("position()", right=position)
+        kpath, kvars = key_path.xpath()
+        step.add_predicate(left=f"{kpath}='{key}'", variables=kvars)
 
     path = XPath(
         [
-            XPathNode.new_self(),
+            XPathNode.self_node(),
             XPathNode(axisname=AXISNAMES.PAR),
-            XPathNode(axisname=AXISNAMES.FSIB),
+            XPathNode(axisname=AXISNAMES.FSIB),  # FSIB
         ]
     )
     indicated_td = _collect(indicated_nodes, path)
@@ -232,8 +222,9 @@ def _close_neighbours(step, indicated_nodes, overflow_nodes):
         if len(indicated_td[key]) == 1:
             tag, position = list(indicated_td[key])[0]
             key_path[-2].nodetest = tag
-            key_path[-1].predicates.append(Predicate("position()", right=position))
-        step.predicates.append(Predicate(left=f"{key_path}='{key}'"))
+            key_path[-1].add_predicate("position()", right=position)
+        kpath, kvars = key_path.xpath()
+        step.add_predicate(left=f"{kpath}='{key}'", variables=kvars)
 
 
 def _common_prefixes(step, indicated_nodes, overflow_nodes):
@@ -248,7 +239,7 @@ def _common_prefixes(step, indicated_nodes, overflow_nodes):
             break
 
     if lcp:
-        step.predicates.append(Predicate(f'starts-with(., "{lcp}")'))
+        step.add_predicate(f"starts-with(text(), $lcp)", variables={"lcp": lcp})
 
 
 def _neighbourhood_search(step, indicated_nodes, overflow_nodes):
