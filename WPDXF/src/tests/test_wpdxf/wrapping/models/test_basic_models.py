@@ -1,13 +1,8 @@
 from lxml.etree import fromstring
-from wrapping.objects.resource import Resource
-from wrapping.models.basic.evaluate import (
-    BasicEvaluator,
-    eval_type_0,
-    eval_type_1,
-    eval_type_2,
-)
-from wrapping.objects.pairs import Example, Query
-from wrapping.objects.webpage import WebPage
+from wpdxf.wrapping.models.basic.evaluate import BasicEvaluator
+from wpdxf.wrapping.objects.pairs import Example, Query
+from wpdxf.wrapping.objects.resource import Resource
+from wpdxf.wrapping.objects.webpage import WebPage
 
 
 def test_eval_types():
@@ -82,4 +77,5 @@ def test_eval_initial():
     assert target_ex_matches == r.matched_examples()
     assert target_q_matches == r.matched_queries()
 
-#TODO: eval_query
+# TODO: eval_query
+

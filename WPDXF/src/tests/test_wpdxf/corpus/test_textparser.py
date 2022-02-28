@@ -1,9 +1,8 @@
 from io import BytesIO
 
-from utils.stats import Statistics
-from utils.settings import Settings
-
-from corpus.parsers.textparser import TextParser
+from wpdxf.corpus.parsers.textparser import TextParser
+from wpdxf.utils.settings import Settings
+from wpdxf.utils.stats import Statistics
 
 
 def test_clean_and_token():
@@ -57,7 +56,9 @@ def test_clean_and_token():
     tp = TextParser()
     assert list(tp.tokenize(input, ignore_stopwords=False)) == target
 
-    input = BytesIO("Test (alias Tset) [optional]{curly brackets} <end>".encode("utf-8"))
+    input = BytesIO(
+        "Test (alias Tset) [optional]{curly brackets} <end>".encode("utf-8")
+    )
     target = [
         ("test", 0),
         ("alias", 1),

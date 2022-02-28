@@ -2,8 +2,8 @@ import logging
 from os import path
 from urllib.request import urlretrieve
 
-from utils.settings import Settings
-from utils.utils import make_dirs
+from wpdxf.utils.settings import Settings
+from wpdxf.utils.utils import make_dirs
 
 
 def retrieve(archive_part: str) -> str:

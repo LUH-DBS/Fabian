@@ -1,6 +1,5 @@
-from wrapping.objects.pairs import Example, Query
-
-from db.queryGenerator import QueryExecutor, _prepare_pair_stmt, _prepare_stmt
+from wpdxf.db.queryGenerator import QueryExecutor
+from wpdxf.wrapping.objects.pairs import Example, Query
 
 
 class TestDBSession:

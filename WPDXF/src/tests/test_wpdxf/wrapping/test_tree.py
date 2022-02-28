@@ -1,6 +1,4 @@
-from wrapping.tree.filter import TauMatchFilter
-from wrapping.tree.uritree import URITree, group_uris
-
+from wpdxf.wrapping.objects.uritree import URITree
 
 def test_create_trees():
     # add_children

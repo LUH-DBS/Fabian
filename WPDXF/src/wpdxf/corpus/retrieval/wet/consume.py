@@ -2,13 +2,15 @@ import logging
 import time
 from os.path import join
 
-from db.tokenwriter import GZIPTokenWriter
-from utils.settings import Settings
-from utils.stats import Statistics
-from utils.utils import open_write, rm_file
 from warcio import WARCWriter
 from warcio.archiveiterator import ArchiveIterator
 from warcio.recordloader import ArcWarcRecord
+from wpdxf.db.tokenwriter import GZIPTokenWriter
+from wpdxf.utils.settings import Settings
+from wpdxf.utils.stats import Statistics
+from wpdxf.utils.utils import open_write, rm_file
+
+
 
 def main_subroutine(archive_name: str):
     """This is the routine to be executed on each individual WET-archive.

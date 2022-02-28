@@ -1,21 +1,22 @@
 from lxml.etree import fromstring
-from wrapping.models.basic.evaluate import BasicEvaluator
-from wrapping.models.nielandt.align import align
-from wrapping.models.nielandt.enrichment import (_close_neighbours,
-                                                 _node_names,
-                                                 _preceding_sibling,
-                                                 _similar_attributes,
-                                                 preprocess)
-from wrapping.models.nielandt.merge import merge
-from wrapping.models.nielandt.reduce import NielandtReducer
-from wrapping.models.nielandt.utils import edit_distance
-from wrapping.objects.pairs import Example
-from wrapping.objects.resource import Resource
-from wrapping.objects.webpage import WebPage
-from wrapping.objects.xpath.node import AXISNAMES, XPathNode
-from wrapping.objects.xpath.path import RelativeXPath, XPath
-from wrapping.objects.xpath.predicate import (AttributePredicate, Conjunction,
-                                              Disjunction, Predicate)
+from wpdxf.wrapping.models.basic.evaluate import BasicEvaluator
+from wpdxf.wrapping.models.nielandt.align import align
+from wpdxf.wrapping.models.nielandt.enrichment import (
+    _close_neighbours,
+    _node_names,
+    _preceding_sibling,
+    _similar_attributes,
+    preprocess,
+)
+from wpdxf.wrapping.models.nielandt.merge import merge
+from wpdxf.wrapping.models.nielandt.reduce import NielandtReducer
+from wpdxf.wrapping.models.nielandt.utils import edit_distance
+from wpdxf.wrapping.objects.pairs import Example
+from wpdxf.wrapping.objects.resource import Resource
+from wpdxf.wrapping.objects.webpage import WebPage
+from wpdxf.wrapping.objects.xpath.node import AXISNAMES, XPathNode
+from wpdxf.wrapping.objects.xpath.path import RelativeXPath, XPath
+from wpdxf.wrapping.objects.xpath.predicate import AttributePredicate, Predicate
 
 
 def test_reduce():

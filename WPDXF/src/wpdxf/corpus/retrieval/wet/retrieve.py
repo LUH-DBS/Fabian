@@ -6,10 +6,10 @@ from glob import glob
 from os import path
 from typing import Callable, List, Optional
 
-from corpus.retrieval.wet.consume import main_subroutine
-from corpus.retrieval.wet.produce import retrieve
-from utils.settings import Settings
-from utils.utils import make_dirs
+from wpdxf.corpus.retrieval.wet.consume import main_subroutine
+from wpdxf.corpus.retrieval.wet.produce import retrieve
+from wpdxf.utils.settings import Settings
+from wpdxf.utils.utils import make_dirs
 
 TERMINATE = "\0"
 

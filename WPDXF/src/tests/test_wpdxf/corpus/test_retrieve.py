@@ -1,13 +1,13 @@
 from os.path import join
 
 import pytest
-from utils.settings import Settings
-from utils.stats import Statistics
-from tests.utils import clear_path, createArcWarcRecord, createWARC, generate_scenario
-from utils.utils import decompress_file, read_file, read_json, write_file
+from wpdxf.utils.settings import Settings
+from wpdxf.utils.stats import Statistics
+from test_wpdxf.test_utils import clear_path, createArcWarcRecord, createWARC, generate_scenario
+from wpdxf.utils.utils import decompress_file, read_file, read_json, write_file
 
-from corpus.retrieval.wet.consume import wet_filter, yield_records
-from corpus.retrieval.wet.retrieve import main_routine, sample_tasks
+from wpdxf.corpus.retrieval.wet.consume import wet_filter, yield_records
+from wpdxf.corpus.retrieval.wet.retrieve import main_routine, sample_tasks
 
 
 def test_wet_filter():

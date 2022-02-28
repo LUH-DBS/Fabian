@@ -1,11 +1,9 @@
 import pytest
 from lxml.etree import fromstring, tostring
-from wrapping.objects.xpath.node import AXISNAMES, XPathNode, get_position
-from wrapping.objects.xpath.path import RelativeXPath, XPath, node_list
-from wrapping.objects.xpath.predicate import (
+from wpdxf.wrapping.objects.xpath.node import AXISNAMES, XPathNode, get_position
+from wpdxf.wrapping.objects.xpath.path import RelativeXPath, XPath
+from wpdxf.wrapping.objects.xpath.predicate import (
     AttributePredicate,
-    Conjunction,
-    Disjunction,
     Predicate,
 )
 
