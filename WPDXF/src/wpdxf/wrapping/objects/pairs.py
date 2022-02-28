@@ -1,5 +1,4 @@
 from dataclasses import InitVar, dataclass, field
-from tkinter.messagebox import NO
 from typing import Set, Tuple
 
 from wpdxf.corpus.parsers.textparser import TextParser
@@ -72,20 +71,20 @@ class Query(Pair):
         super().__init__(inp, None)
 
 
-if __name__ == "__main__":
-    e = Example("This is a test input.", "This is the test output.")
-    print(e)
-    print(e.tok)
-    print(e.pair)
-    print(e.tokens)
+# if __name__ == "__main__":
+#     e = Example("This is a test input.", "This is the test output.")
+#     print(e)
+#     print(e.tok)
+#     print(e.pair)
+#     print(e.tokens)
 
-    e = Query("This is a test input.")
-    e2 = Query("This is a test input.")
-    assert e == e2
-    print(e)
-    print(e.tok)
-    print(e.pair)
-    print(e.tokens)
+#     e = Query("This is a test input.")
+#     e2 = Query("This is a test input.")
+#     assert e == e2
+#     print(e)
+#     print(e.tok)
+#     print(e.pair)
+#     print(e.tokens)
 
-    print("this" in e)
-    print("input" in e)
+#     print("this" in e)
+#     print("input" in e)

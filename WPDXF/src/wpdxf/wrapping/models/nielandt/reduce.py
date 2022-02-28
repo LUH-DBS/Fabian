@@ -1,9 +1,5 @@
-from os import sep
-from typing import List
-
 import numpy as np
 from wpdxf.wrapping.models.nielandt.utils import edit_distance
-from wpdxf.wrapping.objects.pairs import Example
 from wpdxf.wrapping.objects.resource import Resource
 from wpdxf.wrapping.objects.xpath.path import subtree_root
 

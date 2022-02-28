@@ -60,19 +60,6 @@ class BasicEvaluator:
                 print(format_exc())
                 resource.remove_webpage(wp)
 
-    # def evaluate_wp_initial(
-    #     self,
-    #     wp: WebPage,
-    #     resource: Resource,
-    #     examples: List[Example],
-    #     queries: List[Query] = None,
-    # ):
-    #     example_inputs = self._evaluate_initial(wp, examples)
-    #     example_outputs = self._evaluate_pairs(resource, wp, example_inputs)
-
-    #     for (pair, inp), outs in example_outputs.items():
-    #         [wp.add_example(pair, inp, out) for out in outs]
-
     def evaluate(self, resource: Resource, examples, queries):
         result = defaultdict(list)
         queries += [Query(ex.inp) for ex in examples]
@@ -116,18 +103,3 @@ class BasicEvaluator:
                 if eval_out:
                     result[pair, inp] = eval_out
         return dict(result)
-
-        # if is_example:
-        #     eval_out = xpath(
-        #         resource._xpath,
-        #         resource._vars,
-        #         inp,
-        #         path=inp_path,
-        #         term=regex.escape(pair.out),
-        #     )
-        #     [wp.add_example(pair, inp, out) for out in eval_out]
-        # else:
-        #     eval_out = xpath(
-        #         resource._xpath, resource._vars, inp, path=inp_path
-        #     )
-        #     [wp.add_query(pair, inp, out) for out in eval_out]

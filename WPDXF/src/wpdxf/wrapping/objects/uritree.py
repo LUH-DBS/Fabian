@@ -1,4 +1,3 @@
-from itertools import combinations
 from typing import Dict, List, Set, Tuple
 from urllib.parse import urlsplit
 
@@ -223,77 +222,30 @@ class URITreeNode:
     def to_dict(self) -> Dict[str, Tuple[Set[Example], Set[Query]]]:
         return {l.uri: (l.ex_matches, l.q_matches) for l in self.leaves()}
 
+# if __name__ == "__main__":
+#     tau = 2
 
-if __name__ == "__main__":
-    tau = 2
+#     uritree = URITree()
+#     uritree.add_uri("http://www.example.com/A/A1/C", {0, 1}, {0, 4})
+#     uritree.add_uri("http://www.example.com/A/A1/D", {2, 3}, {1, 2})
+#     uritree.add_uri("http://www.example.com/B/B1/F", {0, 1}, {0, 1})
+#     uritree.add_uri("http://www.example.com/B/B1/G", {2, 3}, {2, 3})
+#     uritree.add_uri("http://www.example.com/B/B1/O", {0, 1}, {2, 3})
+#     uritree.add_uri("http://www.example.com/B/B2/H", set(), {5,})
+#     uritree.add_uri("http://www.example.com/C/C1/C", set(), {5,})
+#     uritree.add_uri("http://www.example.com/D/D1/D", {0, 1}, set())
 
-    def _resource_filter(node):
-        # Returns True, when the node matches at least tau examples and all children cover less queries
-        return (
-            len(node.ex_matches) >= tau
-            # and all(node.ex_matches > c.ex_matches for c in node.children.values()) # always True
-            and all(node.q_matches > c.q_matches for c in node.children.values())
-        )
+#     tree: URITreeNode = uritree.root_nodes["www.example.com"]
 
-    def _resource_filter(node):
-        # Returns True, when the node matches at least tau examples and all children cover less queries
-        return (
-            len(node.ex_matches) >= tau
-            # and all(node.ex_matches > c.ex_matches for c in node.children.values()) # always True
-            and all(node.q_matches > c.q_matches for c in node.children.values())
-        )
+#     # print("Filter")
+#     # print(tree.label)
+#     # for node in tree.bfs_filter(_resource_filter):
+#     #     print(node)
 
-    uritree = URITree()
-    uritree.add_uri("http://www.example.com/A/A1/C", {0, 1}, {0, 4})
-    uritree.add_uri("http://www.example.com/A/A1/D", {2, 3}, {1, 2})
-    uritree.add_uri("http://www.example.com/B/B1/F", {0, 1}, {0, 1})
-    uritree.add_uri("http://www.example.com/B/B1/G", {2, 3}, {2, 3})
-    uritree.add_uri("http://www.example.com/B/B1/O", {0, 1}, {2, 3})
-    uritree.add_uri("http://www.example.com/B/B2/H", set(), {5,})
-    uritree.add_uri("http://www.example.com/C/C1/C", set(), {5,})
-    uritree.add_uri("http://www.example.com/D/D1/D", {0, 1}, set())
+#     print(tree)
+#     print("New Filter")
+#     root = tree
+#     res = []
 
-    tree: URITreeNode = uritree.root_nodes["www.example.com"]
-
-    # print("Filter")
-    # print(tree.label)
-    # for node in tree.bfs_filter(_resource_filter):
-    #     print(node)
-
-    def all_pw_disjoint(matches: List[set]) -> bool:
-        # All sets are pairwise disjunct,
-        # if there exists no duplicates between the already seen values and the current set.
-        _union = set()
-        for m in matches:
-            if m & _union:
-                return False
-            _union |= m
-        return True
-
-    def decompose(node: URITreeNode):
-        children = list(
-            filter(lambda n: len(n.ex_matches) >= tau, node.children.values())
-        )
-        # If a decomposition would result in a loss of queries,
-        # return node as resource
-        if not children or set.union(*[n.q_matches for n in children]) < node.q_matches:
-            return [node]
-
-        decomposition = [_n for c in children for _n in decompose(c)]
-
-        # If decomposition leads to partitions that have all pairwise disjunct example sets,
-        # return node as resource.
-        if len(decomposition) > 1 and all_pw_disjoint(
-            map(lambda x: x.ex_matches, decomposition)
-        ):
-            return [node]
-
-        return decomposition
-
-    print(tree)
-    print("New Filter")
-    root = tree
-    res = []
-
-    print(*[str(n) for n in decompose(tree)], sep="\n")
+#     print(*[str(n) for n in tree.decompose()], sep="\n")
 

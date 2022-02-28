@@ -157,16 +157,12 @@ class TableScorer:
 
         return self.answer_scores
 
-
-if __name__ == "__main__":
-    from eval.sources import WebTableSource, WebPageSource
-    from DataXFormer.webtableindexer.Tokenizer import Tokenizer
-
-
-
-    from eval.sources import WebPageSource, WebTableSource
-    examples = {("Spain", "Spanish"), ("Germany", "German"), ("England", "English")}
-    queries = {"Denmark", "France"}
-    scorer = TableScorer(WebPageSource())
-    aw = scorer.expectation_maximization(examples, queries)
-    print(get_answers(aw))
+# if __name__ == "__main__":
+#     from eval.sources import WebTableSource, WebPageSource
+#     from DataXFormer.webtableindexer.Tokenizer import Tokenizer
+#     from eval.sources import WebPageSource, WebTableSource
+#     examples = {("Spain", "Spanish"), ("Germany", "German"), ("England", "English")}
+#     queries = {"Denmark", "France"}
+#     scorer = TableScorer(WebPageSource())
+#     aw = scorer.expectation_maximization(examples, queries)
+#     print(get_answers(aw))

@@ -1,5 +1,4 @@
 import argparse
-import logging
 from datetime import datetime
 from enum import Enum
 from os.path import abspath, basename, isfile, join, splitext
@@ -7,14 +6,8 @@ from typing import List
 
 from pandas import DataFrame, read_csv
 
-from DataXFormer.webtableindexer.Tokenizer import Tokenizer
 from eval.em import TableScorer
 from eval.sources import WebPageSource, WebTableSource
-from wpdxf.tableretieval import (
-    FlashExtractRetrieval,
-    WebPageRetrieval,
-    WebTableRetrieval,
-)
 from wpdxf.utils.report import ReportWriter
 
 BENCHMARKS = "../data/benchmarks/"
@@ -153,10 +146,14 @@ def main(mode, examples, queries, groundtruth):
     scorer = TableScorer(source)
     with rw.start_timer("Expectation Maximization"):
         print(examples, queries, sep="\n")
-        examples, queries, groundtruth = source.prepare_input(examples, queries, groundtruth)
+        examples, queries, groundtruth = source.prepare_input(
+            examples, queries, groundtruth
+        )
         answers = scorer.expectation_maximization(examples, queries)
 
-    examples, answers, groundtruth = source.prepare_output(examples, answers, groundtruth)
+    examples, answers, groundtruth = source.prepare_output(
+        examples, answers, groundtruth
+    )
     rw.write_answer(answers, groundtruth, examples)
 
 

@@ -6,7 +6,7 @@ from wpdxf.utils.report import ReportWriter
 from wpdxf.utils.settings import Settings
 from wpdxf.utils.utils import read_json, write_json
 from wpdxf.wrapping.objects.pairs import Example, Pair, Query
-from wpdxf.wrapping.tree.uritree import URITree
+from WPDXF.src.wpdxf.wrapping.objects.uritree import URITree
 
 
 def pair_to_cache_key(p: Pair):
@@ -55,6 +55,8 @@ class ResourceCollector:
         url_dict = _collect(queries)
         for uri, queries in url_dict.items():
             uritree.add_uri(uri, {}, queries, allow_new=False)
+
+        rw.write_query_result(uritree.to_dict())
 
         groups, forest = self.group_uritree(uritree)
         rw.write_uri_groups(forest)

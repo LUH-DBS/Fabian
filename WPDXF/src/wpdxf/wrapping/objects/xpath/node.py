@@ -114,11 +114,11 @@ class XPathNode:
         )
 
 
-if __name__ == "__main__":
-    p0 = Predicate("position()", right=1)
-    p1 = AttributePredicate("term", right="Test Value")
-    p2 = AttributePredicate("term", right="Test Value2")
-    node = XPathNode(predicates=[[p0], [p1, p2]])
+# if __name__ == "__main__":
+#     p0 = Predicate("position()", right=1)
+#     p1 = AttributePredicate("term", right="Test Value")
+#     p2 = AttributePredicate("term", right="Test Value2")
+#     node = XPathNode(predicates=[[p0], [p1, p2]])
 
-    print(p0.xpath())
-    print(node.xpath())
+#     print(p0.xpath())
+#     print(node.xpath())

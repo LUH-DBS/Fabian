@@ -1,8 +1,6 @@
-import logging
-from itertools import chain
 from typing import Iterator, List, Set
 
-from wpdxf.wrapping.objects.pairs import Example, Pair
+from wpdxf.wrapping.objects.pairs import Pair
 
 __SESSION_TYPES__ = ("postgres",)  # ("postgres", "vertica") "vertica" deprecated
 
@@ -44,6 +42,7 @@ class QueryExecutor:
     def query_pairs(self, pairs: List[Pair]):
         if not pairs:
             return StopIteration
+
         def remove_unresolved_pairs():
             for pair in pairs.copy():
                 if pair.tokens() & self.unknown_tokens:

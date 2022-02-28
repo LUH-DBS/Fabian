@@ -51,16 +51,6 @@ class Resource:
                 res[pair].append((element, wp))
         return dict(res)
 
-    def example_pairs(self) -> Set[Pair]:
-        if self.webpages:
-            return set.union(*(set(wp.examples) for wp in self.webpages))
-        return set()
-
-    def example_pairs(self) -> Set[Pair]:
-        if self.webpages:
-            return set.union(*(set(wp.queries) for wp in self.webpages))
-        return set()
-
     def info(self):
         xpath = self._xpath
         outstr = f"Resource: {self.identifier}\nCurrent XPath: {xpath}\nNumWebpages: {len(self.webpages)}\n\n"
