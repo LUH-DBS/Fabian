@@ -6,7 +6,7 @@ from wpdxf.utils.report import ReportWriter
 from wpdxf.utils.settings import Settings
 from wpdxf.utils.utils import read_json, write_json
 from wpdxf.wrapping.objects.pairs import Example, Pair, Query
-from WPDXF.src.wpdxf.wrapping.objects.uritree import URITree
+from wpdxf.wrapping.objects.uritree import URITree
 
 
 def pair_to_cache_key(p: Pair):
