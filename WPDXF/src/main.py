@@ -8,8 +8,13 @@ from typing import List
 from pandas import DataFrame, read_csv
 
 from DataXFormer.webtableindexer.Tokenizer import Tokenizer
-from DataXFormer.webtables.TableScore import TableScorer
-from wpdxf.tableretieval import FlashExtractRetrieval, WebPageRetrieval, WebTableRetrieval
+from eval.em import TableScorer
+from eval.sources import WebPageSource, WebTableSource
+from wpdxf.tableretieval import (
+    FlashExtractRetrieval,
+    WebPageRetrieval,
+    WebTableRetrieval,
+)
 from wpdxf.utils.report import ReportWriter
 
 BENCHMARKS = "../data/benchmarks/"
@@ -19,6 +24,17 @@ class ModeArgs(str, Enum):
     WEBPAGE = "WP"
     WEBTABLE = "WT"
     FLASHEXTRACT = "FE"
+
+
+def select_cols(idx_or_header, data):
+    if isinstance(idx_or_header, int):
+        return data.iloc[:, idx_or_header]
+    elif isinstance(idx_or_header, str):
+        return data[:, idx_or_header]
+    else:
+        raise ValueError(
+            "All values of input and output must be of the same type (int or str)."
+        )
 
 
 def split_benchmark(
@@ -35,17 +51,8 @@ def split_benchmark(
         raise ValueError("Benchmark contains too few values for evaluation.")
 
     data = benchmark.sample(num_examples + num_queries, random_state=seed)
-
-    if all(isinstance(x, int) for x in input + output):
-        data_inp = data.iloc[:, input]
-        data_out = data.iloc[:, output]
-    elif all(isinstance(x, str) for x in input + output):
-        data_inp = data[:, input]
-        data_out = data[:, output]
-    else:
-        raise ValueError(
-            "All values of input and output must be of the same type (int or str)."
-        )
+    data_inp = select_cols(input, data)
+    data_out = select_cols(output, data)
 
     data_inp = data_inp.values.tolist()
     data_out = data_out.values.tolist()
@@ -94,14 +101,12 @@ def parse_args():
         help="File (csv) used for evaluation",
     )
     parser.add_argument(
-        "--input",
-        default=[0],
-        help="List of indices (int) or headers (str) considered as input.",
+        "--input", default=0, help="Index (int) or header (str) considered as input.",
     )
     parser.add_argument(
         "--output",
-        default=[-1],
-        help="List of indices (int) or headers (str) considered as output.",
+        default=-1,
+        help="Indices (int) or headers (str) considered as output.",
     )
     parser.add_argument("--seed", default=0, type=int, help="Random seed")
     parser.add_argument("--num_examples", default=2, type=int)
@@ -126,32 +131,33 @@ def parse_args():
     )
 
     split = split_benchmark(**vars(args))
+    examples = [*zip(*split[::2])]
+    queries = {*split[1]}
+    groundtruth = [*zip(*split[1::2])]
 
-    return args.mode, [*zip(*split[::2])], [*zip(*split[1:2])], [*zip(*split[1::2])]
+    return args.mode, examples, queries, groundtruth
 
 
 def main(mode, examples, queries, groundtruth):
-
-
     rw = ReportWriter()
-    scorer = TableScorer()
 
     if mode is ModeArgs.WEBPAGE:
-        with rw.start_timer("Answer Retrieval"):
-            args = WebPageRetrieval().run(examples, queries)
+        source = WebPageSource()
     elif mode is ModeArgs.WEBTABLE:
-        with rw.start_timer("Answer Retrieval"):
-            args = WebTableRetrieval().run(examples, queries)
+        source = WebTableSource()
     elif mode is ModeArgs.FLASHEXTRACT:
-        with rw.start_timer("Answer Retrieval"):
-            args = FlashExtractRetrieval().run(examples, queries)
+        source = ...
     else:
         return
 
+    scorer = TableScorer(source)
     with rw.start_timer("Expectation Maximization"):
-        answerList = scorer.expectionMaximization(*args)
+        print(examples, queries, sep="\n")
+        examples, queries, groundtruth = source.prepare_input(examples, queries, groundtruth)
+        answers = scorer.expectation_maximization(examples, queries)
 
-    rw.write_answer(answerList, groundtruth, examples)
+    examples, answers, groundtruth = source.prepare_output(examples, answers, groundtruth)
+    rw.write_answer(answers, groundtruth, examples)
 
 
 if __name__ == "__main__":

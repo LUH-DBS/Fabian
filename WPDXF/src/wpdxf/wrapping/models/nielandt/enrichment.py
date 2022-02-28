@@ -83,7 +83,6 @@ def _preceding_sibling(step, indicated_nodes, overflow_nodes):
     )
     common_tags = indicated_tags - overflow_tags
 
-    print("Preceding Sibling:", common_tags)
     [step.add_predicate(left=f"preceding-sibling::{tag}") for tag in common_tags]
 
 

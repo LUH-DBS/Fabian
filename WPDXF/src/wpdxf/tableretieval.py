@@ -1,3 +1,7 @@
+from collections import defaultdict
+from copy import deepcopy
+from typing import Dict, List, Tuple
+
 from DataXFormer.data.Answer import Answer
 from DataXFormer.data.DBUtil import DBUtil
 from DataXFormer.webtableindexer.Tokenizer import Tokenizer
@@ -62,6 +66,16 @@ class WebPageRetrieval:
 
 
 class WebTableRetrieval:
+    def query_all_answers(self, inputs, outputs, dbUtil):
+        _interval = ", ".join(["%s"] * len(inputs))
+        stmt = f"SELECT tokenized, tableid, rowid FROM main_tokenized WHERE tokenized IN ({_interval})"
+
+        conn = dbUtil.getDBConn()
+        cur = conn.cursor()
+
+        cur.execute(stmt, inputs)
+        print(cur.fetchall())
+
     def run(self, examples, queries, tau=2):
         from DataXFormer.webtables.Transformer import DirectTransformer
 
@@ -79,6 +93,10 @@ class WebTableRetrieval:
         Y = _transform(examples, 1)
         Q = _transform(queries, 0)
 
+        self.query_all_answers(XList + Q, Y, dbUtil)
+
+        # tables = dbUtil.findTableContainX(XList)
+        # print(tables)
         qs = dbUtil.queryWebTables(XList, Y, tau)
 
         queriedTableList = [*set([t for t, *_ in qs])]
@@ -90,24 +108,26 @@ class WebTableRetrieval:
             reversedQS = dbUtil.reverseQuery(XList, Y, queriedTableList)
         else:
             reversedQS = {}
+        print(reversedQS)
 
         valid = dbUtil.findValidTable(XList, Y)
         validTable = dt.validateTable(qs, valid)
 
         qs = [x for x in qs if x[0] in validTable]
 
-        answerList, _ = dt.transform(XList, Y, Q, reversedQS, queriedTableList)
+        answerList, expl = dt.transform(XList, Y, Q, reversedQS, queriedTableList)
+        print(expl)
         exampleAnswerList = scorer.exampleListToAnswer([*zip(XList, Y)], reversedQS)
-
+        raise Exception
         return exampleAnswerList, answerList, Q, reversedQS
 
 
 class FlashExtractRetrieval(WebPageRetrieval):
     def __init__(self) -> None:
         super().__init__()
-        from flashextract.synthesize import \
-            ExtractionProgSynthesizer  # , FlashExtractReduction
+        from flashextract.synthesize import (
+            ExtractionProgSynthesizer,
+        )  # , FlashExtractReduction
 
         self.induction = ExtractionProgSynthesizer()
         # self.reduction = FlashExtractReduction()
-

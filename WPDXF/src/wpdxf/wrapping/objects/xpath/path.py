@@ -1,23 +1,59 @@
 from collections import UserList
 from copy import deepcopy
-from typing import List, Tuple
+from dataclasses import dataclass
+from itertools import count
+from typing import Dict, List, Tuple
 
+import regex
 from lxml.etree import ElementBase, _Element
 from wpdxf.wrapping.objects.xpath.node import AXISNAMES, XPathNode
 from wpdxf.wrapping.objects.xpath.predicate import Predicate
 
 
-def nodelist(last: _Element) -> List[_Element]:
-    result = []
-    element = last
-    while element is not None:
-        result.append(element)
+def nodelist(start: _Element = None, *, end: _Element) -> List[_Element]:
+    if start is None:
+        start = end.getroottree().getroot()
+    result = [end]
+    element = end
+    while element != start:
+        if element is None:
+            raise ValueError("'end' is not an ancestor of 'start'")
         element = element.getparent()
+        result.append(element)
     return result[::-1]
+
+
+def subtree_root(e0: _Element, e1: _Element):
+    if e0 == e1:
+        return e0
+    e0_list = nodelist(end=e0)
+    e1_list = nodelist(end=e1)
+    for element in e0_list[::-1]:
+        if element in e1_list:
+            return element
 
 
 class XPath(UserList):
     """A XPath wrapper with the ability to represent the underlying list of XPathNode as a valid XPath."""
+
+    def xpath(self) -> Tuple[str, Dict[str, str]]:
+        if not self:
+            return "/"
+        _xpath = ""
+        variables = {}
+        cnt = count()
+        for nstr, nvars in map(lambda x: x.xpath(), self):
+            # for key, val in nvars.items():
+            #     c = str(next(cnt))
+            #     nstr = nstr.replace("$" + key, "$" + key + c)
+            #     variables[key + c] = val
+            variables.update(nvars)
+            _xpath += nstr + "/"
+        _xpath = _xpath[:-1]
+        if not _xpath.startswith("."):
+            _xpath = "/" + _xpath
+        _xpath = regex.sub(r"/{3,}", "//", _xpath)
+        return _xpath, variables
 
     def __str__(self) -> str:
         if not self:
@@ -40,8 +76,9 @@ class XPath(UserList):
             and all(self[i] == __o[i] for i in range(len(self)))
         )
 
-    def __ne__(self, __o: object) -> bool:
-        return not self.__eq__(__o)
+    @staticmethod
+    def new_instance(start: _Element = None, *, end: _Element):
+        return XPath(map(XPathNode.new_instance, nodelist(start, end=end)))
 
 
 class VRelativeXPath:
@@ -87,7 +124,7 @@ class RelativeXPath(VRelativeXPath):
         start_node,
         end_node,
         common_path: Tuple[XPathNode] = None,
-        root_node = None
+        root_node=None,
     ) -> None:
         super().__init__(
             start_path=start_path, end_path=end_path, common_path=common_path
@@ -131,7 +168,7 @@ class RelativeXPath(VRelativeXPath):
             end_path=tuple(end_path),
             start_node=start_node,
             end_node=end_node,
-            root_node=root_node
+            root_node=root_node,
         )
 
         eval_out = start_node.xpath(str(relativeXPath))

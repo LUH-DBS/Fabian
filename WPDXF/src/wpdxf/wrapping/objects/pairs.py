@@ -1,7 +1,31 @@
 from dataclasses import InitVar, dataclass, field
+from tkinter.messagebox import NO
 from typing import Set, Tuple
 
 from wpdxf.corpus.parsers.textparser import TextParser
+
+
+def tokenized(input: str, output: str = None, ignore_stopwords=False):
+    tp = TextParser()
+
+    inp = tp.tokenize_str(input, ignore_stopwords)
+    if inp:
+        inp, _ = zip(*inp)
+        inp = " ".join(inp)
+    else:
+        inp = ""
+
+    if output is None:
+        return inp
+
+    out = tp.tokenize_str(output, ignore_stopwords)
+    if out:
+        out, _ = zip(*out)
+        out = " ".join(out)
+    else:
+        out = ""
+
+    return inp, out
 
 
 @dataclass(frozen=True)

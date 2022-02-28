@@ -17,6 +17,7 @@ class Settings:
             "STOP_WORDS",
             "TERM_STORE",
             "MAP_STORE",
+            "URL_CACHE",
             "ERROR_PATH",
             "LOG_PATH",
         ]

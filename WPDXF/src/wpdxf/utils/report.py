@@ -76,46 +76,33 @@ class ReportWriter(metaclass=Singleton):
             f.write(f"{len(groups)} groups:\n")
             f.write("\n".join([str(tree) for tree in groups]))
 
-    def write_answer(self, answerList, groundtruth, examples):
+    def write_answer(self, answer_list, groundtruth, examples):
         t = Tokenizer()
-        for answer in answerList:
-            answer.X = t.tokenize(answer.X or "")
-            answer.Y = t.tokenize(answer.Y or "")
 
         sm = SequenceMatcher()
         df = DataFrame(columns=["X", "Y", "Y (inp)", "Y (gt)", "Ratio", "Score"])
 
-        for (x,), (y_gt,) in examples:
-            x = t.tokenize(x)
-            y_gt = t.tokenize(y_gt)
-
-            all_y = [answer for answer in answerList if x == answer.X]
+        for x, y_gt in examples:
+            all_y = answer_list.get(x)
             df_dict = {"X": x, "Y (inp)": y_gt, "Y (gt)": y_gt}
 
             if all_y:
-                for answer in all_y:
-                    sm.set_seqs(answer.Y, y_gt)
-                    df_dict.update(
-                        **{"Y": answer.Y, "Ratio": sm.ratio(), "Score": answer.score}
-                    )
+                for out, score in all_y.items():
+                    sm.set_seqs(out, y_gt)
+                    df_dict.update(**{"Y": out, "Ratio": sm.ratio(), "Score": score})
                     df = df.append(df_dict, ignore_index=True)
             else:
                 df_dict.update(**{"Y": "", "Ratio": 0, "Score": -1.0})
                 df = df.append(df_dict, ignore_index=True)
 
-        for (x,), (y_gt,) in groundtruth:
-            x = t.tokenize(x)
-            y_gt = t.tokenize(y_gt)
-
-            all_y = [answer for answer in answerList if x == answer.X]
+        for x, y_gt in groundtruth:
+            all_y = answer_list.get(x)
             df_dict = {"X": x, "Y (inp)": "", "Y (gt)": y_gt}
 
             if all_y:
-                for answer in all_y:
-                    sm.set_seqs(answer.Y, y_gt)
-                    df_dict.update(
-                        **{"Y": answer.Y, "Ratio": sm.ratio(), "Score": answer.score}
-                    )
+                for out, score in all_y.items():
+                    sm.set_seqs(out, y_gt)
+                    df_dict.update(**{"Y": out, "Ratio": sm.ratio(), "Score": score})
                     df = df.append(df_dict, ignore_index=True,)
             else:
                 df_dict.update(**{"Y": "", "Ratio": 0, "Score": -1.0})

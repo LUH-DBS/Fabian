@@ -1,8 +1,9 @@
 from typing import List
 
+from wpdxf.wrapping.models.basic.evaluate import ABS_PATH_VAR
 from wpdxf.wrapping.models.nielandt import *
 from wpdxf.wrapping.objects.pairs import Example
-from wpdxf.wrapping.objects.resource import ABS_PATH_VAR, Resource
+from wpdxf.wrapping.objects.resource import Resource
 from wpdxf.wrapping.objects.xpath.node import AXISNAMES, XPathNode
 from wpdxf.wrapping.objects.xpath.path import XPath, subtree_root
 
@@ -16,11 +17,13 @@ class NielandtInduction:
         ]
         start_paths = []
         end_paths = []
+        common_roots = []
         for cn, sn, en, wp in node_collection:
             start_paths.append(wp.xpath(cn, end=sn)[1:])  # ignore common node
-            end_paths.append(wp.xpath(cn, end=en))
+            end_paths.append(wp.xpath(cn, end=en)[1:])
+            common_roots.append([XPathNode.new_instance(cn)])
         start_path = merge(align(start_paths))
-        end_path = merge(align(end_paths))
+        end_path = merge(common_roots) + merge(align(end_paths))
 
         common_nodes, start_nodes, end_nodes, _ = zip(*node_collection)
         start_prefix = XPath([XPathNode.self_node()])
@@ -33,8 +36,8 @@ class NielandtInduction:
             end_path, [*zip(common_nodes, end_nodes)], prefix=end_prefix,
         )
 
-        # start_path = enrich(start_path, start_prep)
-        # end_path = enrich(end_path, end_prep)
+        start_path = enrich(start_path, start_prep)
+        end_path = enrich(end_path, end_prep)
 
         start_path = start_prefix + start_path
         spath, svars = start_path.xpath()

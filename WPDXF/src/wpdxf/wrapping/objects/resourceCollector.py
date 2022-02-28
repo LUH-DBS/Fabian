@@ -1,9 +1,20 @@
-from typing import Counter, Dict, Iterator, List, Tuple
+from collections import defaultdict
+from typing import Counter, Dict, Iterator, List, Set, Tuple
 
 from wpdxf.db.queryGenerator import QueryExecutor
 from wpdxf.utils.report import ReportWriter
+from wpdxf.utils.settings import Settings
+from wpdxf.utils.utils import read_json, write_json
 from wpdxf.wrapping.objects.pairs import Example, Pair, Query
 from wpdxf.wrapping.tree.uritree import URITree
+
+
+def pair_to_cache_key(p: Pair):
+    return (p.inp, "") if isinstance(p, Query) else p.pair
+
+
+def cache_key_to_pair(k: Tuple[str, str]):
+    return Query(*k) if k[1] == "" else Example(*k)
 
 
 class ResourceCollector:
@@ -12,33 +23,70 @@ class ResourceCollector:
         self.tau = tau
         self.limit = limit
 
+        self.cache_path = Settings().URL_CACHE
+        self.values_in_cache = {
+            (inp, out)
+            for inp, outs in read_json(self.cache_path).items()
+            for out in outs
+        }
+
     def collect(self, examples, queries):
+        def _collect(pairs):
+            cached_pairs = [
+                p for p in pairs if pair_to_cache_key(p) in self.values_in_cache
+            ]
+            unseen_pairs = [p for p in pairs if p not in cached_pairs]
+
+            url_dict = defaultdict(lambda: set())
+            self.collect_from_corpus(unseen_pairs, url_dict)
+            self.store_to_cache(url_dict)
+            self.collect_from_cache(cached_pairs, url_dict)
+            return url_dict
+
         rw = ReportWriter()
         uritree = URITree()
 
-        # Collect all websites that contain at least one example
-        # and group them in a URITree structure
-        with rw.start_timer("Collect Examples"):
-            uritree = self.update_uritree(uritree, examples)
+        url_dict = _collect(examples)
+        for uri, examples in url_dict.items():
+            uritree.add_uri(uri, examples, {})
 
-        # Remove all root's children subtrees (hosts) that do not cover at least tau examples.
         uritree.reduce(self.tau)
 
-        # Collect all websites that contain at least one query
-        # and update the URITree structure
-        with rw.start_timer("Collect Queries"):
-            uritree = self.update_uritree(uritree, queries, allow_new_roots=False)
+        url_dict = _collect(queries)
+        for uri, queries in url_dict.items():
+            uritree.add_uri(uri, {}, queries, allow_new=False)
 
-        # Filter and group the final uritree,
-        # groups are sorted descending on the amount of matching queries.
         groups, forest = self.group_uritree(uritree)
         rw.write_uri_groups(forest)
 
         return groups
 
-    def update_uritree(
-        self, uritree: URITree, pairs: List[Pair], allow_new_roots: bool = True,
-    ):
+    def collect_from_cache(self, pairs: List[Pair], url_dict: defaultdict):
+        cache = read_json(self.cache_path)
+
+        for pair in pairs:
+            inp, out = pair_to_cache_key(pair)
+            for url in cache[inp][out]:
+                url_dict[url].add(pair)
+
+    def store_to_cache(self, url_dict: dict):
+        cache = read_json(self.cache_path)
+        for url, pairs in url_dict.items():
+            for pair in pairs:
+                inp, out = pair_to_cache_key(pair)
+                cache.setdefault(inp, {}).setdefault(out, []).append(url)
+
+        self.values_in_cache = {
+            (inp, out) for inp, outs in cache.items() for out in outs
+        }
+        write_json(self.cache_path, cache)
+
+    def collect_from_corpus(
+        self, pairs: List[Pair], url_dict: defaultdict
+    ) -> Dict[str, Set[Pair]]:
+        if not pairs:
+            return
+
         rw = ReportWriter()
         with rw.start_timer("DB Request"):
             partition_iter = self.query_executor.query_pairs(pairs)
@@ -46,6 +94,7 @@ class ResourceCollector:
         masks = self._create_masks(pairs, self.query_executor.token_dict)
         max_size = max(len(mask) for mask in masks.values())
         min_size = min(len(mask) for mask in masks.values())
+
         with rw.start_timer("Partition Iteration"):
             for uri, partition in partition_iter:
                 uri_matches = set()
@@ -56,20 +105,17 @@ class ResourceCollector:
                     for key, mask in masks.items():
                         if window[: len(mask)] == mask:
                             uri_matches.add(key)
-
                 counter = Counter(map(lambda key: key[0], uri_matches))
-                ex_matches, q_matches = set(), set()
+                matches = set()
                 for pair, c in counter.most_common():
                     if c == 1 and isinstance(pair, Query):
-                        q_matches.add(pair)
+                        matches.add(pair)
                     elif c == 2:
                         # c == 2 is only possible if pair is an Example,
                         # c > 2 is not possible
-                        ex_matches.add(pair)
-
-                if uri_matches:
-                    uritree.add_uri(uri, ex_matches, q_matches, allow_new_roots)
-        return uritree
+                        matches.add(pair)
+                if matches:
+                    url_dict[uri] = matches
 
     def _create_masks(self, pairs: List[Pair], token_dict: Dict[str, int]) -> Dict:
         masks = {}
@@ -95,19 +141,12 @@ class ResourceCollector:
             List[Tuple[str, List[str]]]: A list of resources, each represented by a (partial) uri and all uris included in the resource.
         """
 
-        def _resource_filter(node):
-            # Returns True, when the node matches at least tau examples and all children cover less queries
-            return (
-                len(node.ex_matches) >= self.tau
-                #and all(node.ex_matches > c.ex_matches for c in node.children.values()) # always True
-                and all(node.q_matches > c.q_matches for c in node.children.values())
-            )
-
         groups = []
         # filter_forest is used for visualization, has no other use.
         filtered_forest = []
         for tree in uritree.root_nodes.values():
-            filter_result = tree.bfs_filter(_resource_filter)
+            filter_result = tree.decompose(self.tau)
+            # filter_result = tree.bfs_filter(_resource_filter)
             groups.extend(filter_result)
             if filter_result:
                 filtered_forest.append(tree)

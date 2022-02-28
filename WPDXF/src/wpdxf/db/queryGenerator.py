@@ -42,6 +42,8 @@ class QueryExecutor:
         return self.token_dict, self.unknown_tokens
 
     def query_pairs(self, pairs: List[Pair]):
+        if not pairs:
+            return StopIteration
         def remove_unresolved_pairs():
             for pair in pairs.copy():
                 if pair.tokens() & self.unknown_tokens:

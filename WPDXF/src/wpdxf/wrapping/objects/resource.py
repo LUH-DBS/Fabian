@@ -1,34 +1,20 @@
 from collections import defaultdict
 from traceback import format_exc
-from typing import Callable, Dict, Iterable, List, Set, Tuple
+from typing import Dict, Iterable, List, Set, Tuple
 
 from lxml import etree
 from wpdxf.wrapping.objects.pairs import Pair
 from wpdxf.wrapping.objects.webpage import WebPage
 
-INITIAL_XPATH = "//*[re:test(.,$term,'i')][not(descendant::*[re:test(.,$term,'i')])]"
-ABS_PATH_VAR = "$abs_start_path"
+
 
 
 class Resource:
     def __init__(self, identifier: str, webpages: Iterable[str]) -> None:
         self.identifier: str = identifier
         self.webpages: List[WebPage] = [WebPage(wp) for wp in webpages]
-        self._xpath: str = INITIAL_XPATH
+        self._xpath: str = None
         self._vars: Dict[str, str] = {}
-
-    def xpath(self, element: etree._Element, path: str = None, **kwargs) -> etree.XPath:
-        path = path or ""
-        _xpath = etree.XPath(
-            self._xpath.replace(ABS_PATH_VAR, path),
-            namespaces={"re": "http://exslt.org/regular-expressions"},
-        )
-        try:
-            return _xpath(element, **self._vars, **kwargs)
-        except etree.XPathEvalError as e:
-            print(_xpath.path)
-            print(format_exc())
-            return []
 
     def remove_webpage(self, wp):
         self.webpages.remove(wp)
