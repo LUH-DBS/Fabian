@@ -33,7 +33,9 @@ def xpath(
     path = path or ""
     query = query.replace(ABS_PATH_VAR, path)
     try:
-        _xpath = etree.XPath(query)
+        _xpath = etree.XPath(
+            query, namespaces={"re": "http://exslt.org/regular-expressions"}
+        )
         return _xpath(element, **query_vars, **kwargs)
     except etree.Error as e:
         print(query)
@@ -80,7 +82,7 @@ class BasicEvaluator:
             for (pair, inp), outs in query_outputs.items():
                 for out in outs:
                     result[pair].append((inp, out))
-        
+
         return result
 
     def evaluate_wp(self, wp: WebPage, resource: Resource, queries):

@@ -106,7 +106,6 @@ def _similar_attributes(step, indicated_nodes, overflow_nodes):
         else:
             similar_attributes.append((key, None))
 
-    print("Similar attributes:", similar_attributes)
     [step.add_attribute(left, right=right) for left, right in similar_attributes]
 
 
