@@ -1,4 +1,15 @@
+beautifulsoup4==4.10.0
+htmlmin==0.1.12
+lxml==4.6.3
 nltk==3.6.5
+numpy==1.21.2
+orjson==3.6.7
+pandas==1.3.4
+psycopg2==2.8.6
+pykson==0.9.9.8.7
+pyparsing==3.0.4
 pytest==6.2.4
+regex==2021.8.3
+requests==2.26.0
 vertica_python==1.0.1
 warcio==1.6.3
