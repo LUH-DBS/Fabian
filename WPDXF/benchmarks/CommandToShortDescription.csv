@@ -1,0 +1,61 @@
+Command,Name
+SoX,"Sound eXchange, the Swiss Army knife of audio manipulation"
+TkCVS,a Tk/Tcl Graphical Interface to CVS and Subversion
+acl,Access Control Lists
+atool,A script for managing file archives of various types
+audacity,Graphical cross-platform audio editor
+aviindex,Write and read text files describing the index of an AVI file
+bash,GNU Bourne-Again SHell
+bchunk,CD image format conversion from bin/cue to iso/cdr
+cadaver,A command-line WebDAV client for Unix.
+calendar,reminder service
+chacl,change the access control list of a file or directory
+chmod,change file mode bits
+clogin,Cisco/Foundry login script
+colorit,a script for markuping the text input
+conserver,console server daemon
+console,console server client program
+cpp,The C Preprocessor
+cron,daemon to execute scheduled commands
+ctdb,clustered tdb database management utility
+curl,transfer a URL
+dict,a perl client for accessing network dictionary servers
+dump,ext2/3 filesystem backup
+ecryptfs-rewrite-file,force a file to be rewritten (reencrypted) in the lower filesystem
+find,search for files in a directory hierarchy
+ftp,Internet file transfer program
+getfacl,get file access control lists
+git-config,Get and set repository or global options
+ksh,Public domain Korn shell
+lisa,draws animated full-loop lisajous figures
+ls,list directory contents
+mkisofs,create an hybrid ISO9660/JOLIET/HFS filesystem with optional Rock Ridge attributes.
+modprobe,program to add and remove modules from the Linux Kernel
+mtree,map a directory hierarchy
+passwd,password file
+pax,portable archive interchange
+pidstat,Report statistics for Linux tasks.
+pmdashping,"shell-ping""performance metrics domain agent"""
+printf,format and print data
+ps,report a snapshot of the current processes.
+pwd,print name of current/working directory
+rancid,Cisco configuration filter
+sh,command interpreter (shell)
+smbclient,ftp-like client to access SMB/CIFS resources on servers
+smem,Report memory usage with shared memory divided proportionally.
+spiral,draws moving circular spiral patterns
+ssh-copy-id,install your public key in a remote machine's authorized_keys
+sshd,OpenSSH SSH daemon
+star,unique standard tape archiver
+stat,display file or file system status
+sum,checksum and count the blocks in a file
+svn,Subversion command line client tool
+sync,flush file system buffers
+task,A command line todo manager.
+taskrc,Configuration file for the task(1) command
+tcprobe,probe multimedia streams from medium and print information on the standard output
+top,display Linux tasks
+transcode,LINUX video stream processing tool
+xlock,Locks the local X display until a password is entered.
+zshall,the Z shell meta-man page
+zshbuiltins,zsh built-in commands
