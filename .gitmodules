@@ -1,3 +1,3 @@
 [submodule "WPDXF/src/DataXFormer"]
 	path = WPDXF/src/DataXFormer
-	url = https://github.com/LUH-DBS/DataXFormer.git
+	url = git@github.com:LUH-DBS/DataXFormer.git
