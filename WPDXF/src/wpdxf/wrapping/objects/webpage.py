@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import Dict, List, Tuple
+from typing import Dict, Set, Tuple
 
 from lxml.etree import _Element
 from wpdxf.corpus.retrieval.warc.warcrecord import get_html
@@ -10,8 +10,8 @@ from wpdxf.wrapping.objects.xpath.path import XPath
 class WebPage:
     def __init__(self, uri) -> None:
         self.uri: str = uri
-        self._examples = defaultdict(list)
-        self._queries = defaultdict(list)
+        self._examples = defaultdict(set)
+        self._queries = defaultdict(set)
         self._html: str = None
         self._xpath_cache: Dict[_Element, XPath] = {}
 
@@ -25,18 +25,18 @@ class WebPage:
         return self._html
 
     @property
-    def examples(self) -> Dict[Pair, List[Tuple[_Element, _Element]]]:
+    def examples(self) -> Dict[Pair, Set[Tuple[_Element, _Element]]]:
         return dict(self._examples)
 
     @property
-    def queries(self) -> Dict[Pair, List[Tuple[_Element, _Element]]]:
+    def queries(self) -> Dict[Pair, Set[Tuple[_Element, _Element]]]:
         return dict(self._queries)
 
     def add_example(self, key: Pair, inp: _Element, out: _Element):
-        self._examples[key].append((inp, out))
+        self._examples[key].add((inp, out))
 
     def add_query(self, key: Pair, inp: _Element, out: _Element = None):
-        self._queries[key].append((inp, out))
+        self._queries[key].add((inp, out))
 
     def drop_examples(self, key: Pair):
         return self._examples.pop(key, None)
@@ -47,14 +47,14 @@ class WebPage:
     def drop_all_queries(self):
         self._queries = defaultdict(list)
 
-    def example_inputs(self) -> Dict[Pair, List[_Element]]:
-        return {pair: [inp for inp, _ in vals] for pair, vals in self._examples.items()}
+    def example_inputs(self) -> Dict[Pair, Set[_Element]]:
+        return {pair: {inp for inp, _ in vals} for pair, vals in self._examples.items()}
 
-    def example_outputs(self) -> Dict[Pair, List[_Element]]:
-        return {pair: [out for _, out in vals] for pair, vals in self._examples.items()}
+    def example_outputs(self) -> Dict[Pair, Set[_Element]]:
+        return {pair: {out for _, out in vals} for pair, vals in self._examples.items()}
 
-    def query_inputs(self) -> Dict[Pair, List[_Element]]:
-        return {pair: [inp for inp, _ in vals] for pair, vals in self._queries.items()}
+    def query_inputs(self) -> Dict[Pair, Set[_Element]]:
+        return {pair: {inp for inp, _ in vals} for pair, vals in self._queries.items()}
 
     def xpath(self, start: _Element = None, *, end: _Element) -> XPath:
         res = self._xpath_cache.get((start, end), XPath.new_instance(start, end=end))

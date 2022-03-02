@@ -1,59 +1,64 @@
-import pytest
-from lxml.etree import fromstring, tostring
-from wpdxf.wrapping.objects.xpath.node import AXISNAMES, XPathNode, get_position
-from wpdxf.wrapping.objects.xpath.path import RelativeXPath, XPath
-from wpdxf.wrapping.objects.xpath.predicate import (
-    AttributePredicate,
-    Predicate,
-)
+from lxml.etree import fromstring
+from wpdxf.wrapping.objects.xpath.node import (AXISNAMES, XPathNode,
+                                               get_position)
+from wpdxf.wrapping.objects.xpath.path import XPath, nodelist, subtree_root
+from wpdxf.wrapping.objects.xpath.predicate import (AttributePredicate,
+                                                    Predicate)
 
 
 def test_predicates():
     predicate0 = Predicate(left="position()")
-    target = "position()"
-    assert target == str(predicate0)
+    target = "position()", {}
+    output = predicate0.xpath()
+    assert target == output
 
     predicate1 = Predicate(left="position()", comp=None, right=None)
-    target = "position()"
-    assert target == str(predicate1)
+    target = "position()", {}
+    output = predicate0.xpath()
+    assert target == output
 
     assert predicate0 == predicate1
 
     predicate1 = Predicate(left="position()", comp=None, right=1)
-    target = "1"
-    assert target == str(predicate1)
+    target = "1", {}
+    output = predicate1.xpath()
+    assert target == output
 
     assert predicate0 != predicate1
 
     predicate0 = AttributePredicate(left="key")
-    target = "@key"
-    assert target == str(predicate0)
+    target = "@key", {}
+    output = predicate0.xpath()
+    assert target == output
 
     predicate0 = AttributePredicate(left="key", right="value")
-    target = '@key="value"'
-    assert target == str(predicate0)
+    key = f"r{hash('value')}"
+    target = "@key=$" + key, {key: "value"}
+    output = predicate0.xpath()
+    assert target == output
 
-    conjunction = Conjunction([])
-    target = ""
-    assert target == str(conjunction)
+    node = XPathNode()
+    node.add_predicate(left="p0")
+    node.add_predicate(left="p1")
+    target = "*[p0][p1]", {}
+    output = node.xpath()
+    assert target == output
 
-    conjunction = Conjunction([Predicate(left="p0"), Predicate(left="p1")])
-    target = "[p0][p1]"
-    assert target == str(conjunction)
+    node = XPathNode()
+    node.predicates.append([Predicate(left="p0"), Predicate(left="p1")])
+    target = "*[p0 or p1]", {}
+    output = node.xpath()
+    assert target == output
 
-    disjunction = Disjunction([])
-    target = ""
-    assert target == str(disjunction)
-
-    disjunction = Disjunction([Predicate(left="p0"), Predicate(left="p1")])
-    target = "p0 or p1"
-    assert target == str(disjunction)
-
-    conjunction = Conjunction(
-        [Disjunction([Predicate("p0"), Predicate("p1")]), Predicate(left="p1")]
-    )
-    target = "[p0 or p1][p1]"
-    assert target == str(conjunction)
+    node = XPathNode()
+    node.add_attribute("p1", right="test0")
+    node.predicates.append([Predicate("p0"), AttributePredicate("p1", right="test1")])
+    key0 = f"r{hash('test0')}"
+    key1 = f"r{hash('test1')}"
+    target_vars = {key0: "test0", key1: "test1"}
+    target = f"*[@p1=${key0}][p0 or @p1=${key1}]", target_vars
+    output = node.xpath()
+    assert target == output
 
 
 def test_get_position():
@@ -78,21 +83,25 @@ def test_nodes():
     node = XPathNode()
     assert node.axisname is AXISNAMES.CHLD
     assert node.nodetest == "node()"
-    assert isinstance(node.predicates, Conjunction)
-    target = "*"
-    assert target == str(node)
+    assert isinstance(node.predicates, list)
+    target = "*", {}
+    output = node.xpath()
+    assert target == output
 
     node.nodetest = "div"
-    target = "div"
-    assert target == str(node)
+    target = "div", {}
+    output = node.xpath()
+    assert target == output
 
     node.axisname = AXISNAMES.DESC
-    target = "descendant::div"
-    assert target == str(node)
+    target = "descendant::div", {}
+    output = node.xpath()
+    assert target == output
 
-    node.predicates.append(Predicate("key"))
-    target = "descendant::div[key]"
-    assert target == str(node)
+    node.add_predicate(left="key")
+    target = "descendant::div[key]", {}
+    output = node.xpath()
+    assert target == output
 
     n0 = XPathNode()
     n1 = XPathNode()
@@ -101,15 +110,15 @@ def test_nodes():
     n0.axisname = AXISNAMES.SELF
     assert n0 != n1
 
-
     html = fromstring("<div><a>First a</a><b>First b</b><a>Second a</a></div>")
 
     target = html
     # input
     step = XPathNode.new_instance(html)
-    xpath = "/" + str(step)
+    xpath, xvars = step.xpath()
+    xpath = "/" + xpath
 
-    output = html.xpath(xpath)
+    output = html.xpath(xpath, **xvars)
     assert len(output) == 1
     output = output[0]
     assert target == output
@@ -117,66 +126,79 @@ def test_nodes():
     target = html.getchildren()[0]
     # input
     step = XPathNode.new_instance(target)
-    xpath += "/" + str(step)
+    _xpath, _xvars = step.xpath()
+    xpath += "/" + _xpath
+    xvars.update(_xvars)
 
-    output = html.xpath(xpath)
+    output = html.xpath(xpath, **xvars)
     assert len(output) == 1
     output = output[0]
     assert target == output
 
     # input
-    step = XPathNode.new_self()
-    xpath += "/" + str(step)
+    step = XPathNode.self_node()
+    _xpath, _xvars = step.xpath()
+    xpath += "/" + _xpath
+    xvars.update(_xvars)
 
-    output = html.xpath(xpath)
+    output = html.xpath(xpath, **xvars)
     assert len(output) == 1
     output = output[0]
     assert target == output
 
 
-def test_node_list():
+def test_nodelist():
     html = fromstring("<div><a>First a<b>First b</b></a><a>Second a</a></div>")
     input = html.getchildren()[0].getchildren()[0]
     target = [html, html.getchildren()[0], input]
-    output = node_list(input)
+    output = nodelist(end=input)
     assert output == target
 
 
 def test_xpath():
     html = fromstring("<div><a>First a<b>First b</b></a><a>Second a</a></div>")
     b_element = html.getchildren()[0].getchildren()[0]
-    nodes = node_list(b_element)
+    nodes = nodelist(end=b_element)
 
     input = XPath()
-    output = html.xpath(str(input))
+    xpath, xvars = input.xpath()
+    output = html.xpath(xpath, **xvars)
     target = []
     assert output == target
 
     for node in nodes:
         input.append(XPathNode.new_instance(node))
-        output = html.xpath(str(input))
+        xpath, xvars = input.xpath()
+        output = html.xpath(xpath, **xvars)
         target = [node]
         assert output == target
 
     input = XPath()
     input.append(XPathNode(axisname=AXISNAMES.DEOS))
-    target = "/descendant-or-self::node()"
-    assert str(input) == target
+    target = "/descendant-or-self::node()", {}
+    output = input.xpath()
+    assert output == target
 
-    target = "//descendant-or-self::node()"  # This is not the correct behaviour, but okay for now.
+    target = (
+        "//descendant-or-self::node()",
+        {},
+    )  # This is not the correct behaviour, but okay for now.
     for _ in range(3):
         input.append(XPathNode(axisname=AXISNAMES.DEOS))
-        assert str(input) == target
+        output = input.xpath()
+        assert output == target
 
     input = XPath()
     input.append(XPathNode())
-    target = "/*"
-    assert str(input) == target
+    target = "/*", {}
+    output = input.xpath()
+    assert output == target
 
-    target = "//*"
+    target = "//*", {}
     for _ in range(3):
         input.insert(0, XPathNode(axisname=AXISNAMES.DEOS))
-        assert str(input) == target
+        output = input.xpath()
+        assert output == target
 
 
 def test_relxpath():
@@ -184,37 +206,27 @@ def test_relxpath():
         "<div><a>First a<b><c>Start</c></b></a><d><e><f>End</f></e></d></div>"
     )
     start_node = html.xpath("//c")[0]
+    abs_start_path = start_node.getroottree().getpath(start_node)
     end_node = html.xpath("//f")[0]
 
-    container = []
+    root_element = subtree_root(start_node, end_node)
 
-    rel_xpath = RelativeXPath.new_instance(start_node, end_node, container)
-    root_element = container[0]
-
-    input = str(rel_xpath.start_path)
+    start_path = XPath.new_instance(root_element, end=start_node)
+    spath, svars = start_path.xpath()
     target = [start_node]
-    output = root_element.xpath(input)
+    output = root_element.xpath(spath, **svars)
     assert target == output, input
 
-    input = str([XPathNode.new_self()] + rel_xpath.end_path[1:])
+    end_path = XPath.new_instance(root_element, end=end_node)
+    epath = [XPathNode.self_node()] + end_path[1:]
+    xpath, xvars = epath.xpath()
     target = [end_node]
-    output = root_element.xpath(input)
+    output = root_element.xpath(xpath, **xvars)
     assert target == output, input
 
-    input = str(rel_xpath)
+    end_path[0].add_predicate(spath, right="$TEST", variables=svars)
+    xpath, xvars = end_path.xpath()
+    xpath = xpath.replace("$TEST", abs_start_path)
     target = [end_node]
-    output = start_node.xpath(input)
-    assert target == output, input
-
-    target = str(rel_xpath)
-
-    rel_xpath.start_node = None
-    with pytest.raises(AssertionError):
-        rel_xpath.as_xpath()
-
-    output = rel_xpath.as_xpath(start_node=start_node)
-    assert output == target
-
-    abs_start_path = start_node.getroottree().getpath(start_node)
-    output = rel_xpath.as_xpath(abs_start_path=abs_start_path)
-    assert output == target
+    output = start_node.xpath(xpath, **xvars)
+    assert target == output, xpath

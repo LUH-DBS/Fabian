@@ -1,23 +1,15 @@
 from wpdxf.wrapping.objects.uritree import URITree
 
+
 def test_create_trees():
-    # add_children
-    root = URITree("test", None)
-    child0 = root.add_child("same")
-    child1 = root.add_child("same")
-    assert child0 == child1
-
-    child2 = root.add_child("other")
-    assert child0 != child2
-
     # add_path
-    root = URITree("exA.com", None)
+    tree = URITree()
     ex_matches = {0}
     q_matches = {1}
-    uri = "www.exA.com/stepA/stepC"
-    root.add_path(
-        "stepA", "stepC", ex_matches=ex_matches, q_matches=q_matches, leaf=uri,
-    )
+    uri = "https://www.exA.com/stepA/stepC"
+    tree.add_uri(uri, ex_matches=ex_matches, q_matches=q_matches)
+
+    root = tree.root_nodes["www.exA.com"]
 
     assert root.ex_matches == ex_matches
     assert root.q_matches == q_matches
@@ -30,14 +22,14 @@ def test_create_trees():
     assert leaf.uri == uri
 
     # create_uri_trees
-    candidates = {
-        "http://www.exA.com/stepA/stepC": ({0}, {1}),
-        "http://www.exA.com/stepA/stepD": ({1}, {0}),
-        "http://www.exA.com/stepB": ({0}, {0}),
-        "http://www.exB.com/stepA": ({0}, {1}),
-    }
+    tree = URITree()
+    tree.add_uri("http://www.exA.com/stepA/stepC", {1}, {0})
+    tree.add_uri("http://www.exA.com/stepA/stepD", {1}, {0})
+    tree.add_uri("http://www.exA.com/stepB", {0}, {0})
+    tree.add_uri("http://www.exB.com/stepA", {0}, {1})
+
     target_keys = ["www.exA.com", "www.exB.com"]
-    output = URITree.create_uri_trees(candidates)
+    output = tree.root_nodes
     assert sorted(output) == target_keys
 
     assert len(output["www.exA.com"].leaves()) == 3
@@ -46,13 +38,35 @@ def test_create_trees():
 
 
 def test_group_uris():
+    tau = 2
+
+    uritree = URITree()
+    uritree.add_uri("http://www.example.com/A/A1/C", {0, 1}, {0, 4})
+    uritree.add_uri("http://www.example.com/A/A1/D", {2, 3}, {1, 2})
+    uritree.add_uri("http://www.example.com/B/B1/F", {0, 1}, {0, 1})
+    uritree.add_uri("http://www.example.com/B/B1/G", {2, 3}, {2, 3})
+    uritree.add_uri("http://www.example.com/B/B1/O", {0, 1}, {2, 3})
+    uritree.add_uri("http://www.example.com/B/B2/H", set(), {5,})
+    uritree.add_uri("http://www.example.com/C/C1/C", set(), {5,})
+    uritree.add_uri("http://www.example.com/D/D1/D", {0, 1}, set())
+
+    tree = uritree.root_nodes["www.example.com"]
+    groups = tree.decompose(tau)
+    target = {"A1", "B", "D"}
+    assert target == {g.label for g in groups}
+
     candidates = {
         "http://www.exA.com/stepA/stepC": ({0}, {1}),
         "http://www.exA.com/stepA/stepD": ({1}, {0}),
         "http://www.exA.com/stepB": ({0, 1}, {0}),
         "http://www.exB.com/stepA": ({0, 1}, {1}),
     }
-    resource_filter = TauMatchFilter()
+
+    uritree = URITree()
+    uritree.add_uri("http://www.exA.com/stepA/stepC", {0}, {1})
+    uritree.add_uri("http://www.exA.com/stepA/stepD", {1}, {0})
+    uritree.add_uri("http://www.exA.com/stepB", {0, 1}, {0})
+    uritree.add_uri("http://www.exB.com/stepA", {0, 1}, {0})
 
     target = [
         (
@@ -63,8 +77,13 @@ def test_group_uris():
         ("www.exB.com/stepA", ["http://www.exB.com/stepA"],),
     ]
 
-    output = group_uris(candidates, resource_filter)
-    output = dict(output)
+    output = dict(
+        [
+            (d.path(), [l.uri for l in d.leaves()])
+            for node in uritree.root_nodes.values()
+            for d in node.decompose(tau)
+        ]
+    )
     for t_name, t_uris in target:
         assert t_name in output
         assert sorted(output[t_name]) == sorted(t_uris)
@@ -75,24 +94,33 @@ def test_group_uris():
         "http://www.exA.com/stepA/stepC": ({0, 1}, {1}),
         "http://www.exA.com/stepA/stepD": ({1, 3}, {0}),
         "http://www.exA.com/stepA/stepE": ({}, {2}),
-        "http://www.exA.com/stepB": ({0, 1, 2}, {0}),
+        "http://www.exB.com/stepB": ({0, 1, 2}, {0}),
     }
-    resource_filter = TauMatchFilter()
+    uritree = URITree()
+    uritree.add_uri("http://www.exA.com/stepA/stepC", {0, 1}, {1})
+    uritree.add_uri("http://www.exA.com/stepA/stepD", {1, 3}, {0})
+    uritree.add_uri("http://www.exA.com/stepA/stepE", {}, {2})
+    uritree.add_uri("http://www.exB.com/stepB", {0, 1, 2}, {0})
 
     target = [
         (
-            "www.exA.com",
+            "www.exA.com/stepA",
             [
                 "http://www.exA.com/stepA/stepC",
                 "http://www.exA.com/stepA/stepD",
                 "http://www.exA.com/stepA/stepE",
-                "http://www.exA.com/stepB",
             ],
         ),
+        ("www.exB.com/stepB", ["http://www.exB.com/stepB"]),
     ]
 
-    output = group_uris(candidates, resource_filter)
-    output = dict(output)
+    output = dict(
+        [
+            (d.path(), [l.uri for l in d.leaves()])
+            for node in uritree.root_nodes.values()
+            for d in node.decompose(tau)
+        ]
+    )
     for t_name, t_uris in target:
         assert t_name in output
         assert sorted(output[t_name]) == sorted(t_uris)

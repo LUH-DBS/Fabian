@@ -26,8 +26,8 @@ class TestDBSession:
 
 
 def test_create_token_dict():
-    examples = [Example(0, "0", "1")]
-    queries = [Query(1, "2"), Query(2, "3 4")]
+    examples = [Example("0", "1")]
+    queries = [Query("2"), Query("3 4")]
 
     session = TestDBSession()
     session.func = lambda args: ((str(t), int(t)) for t in sorted(args))
