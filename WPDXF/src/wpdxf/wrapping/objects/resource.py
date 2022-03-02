@@ -40,15 +40,17 @@ class Resource:
     def example_inputs(self) -> Dict[Pair, List[Tuple[etree._Element, WebPage]]]:
         res = defaultdict(list)
         for wp in self.webpages:
-            for pair, element in wp.example_inputs().items():
-                res[pair].append((element, wp))
+            for pair, elements in wp.example_inputs().items():
+                for element in elements:
+                    res[pair].append((element, wp))
         return dict(res)
 
     def example_outputs(self) -> Dict[Pair, List[Tuple[etree._Element, WebPage]]]:
         res = defaultdict(list)
         for wp in self.webpages:
-            for pair, element in wp.example_inputs().items():
-                res[pair].append((element, wp))
+            for pair, elements in wp.example_outputs().items():
+                for element in elements:
+                    res[pair].append((element, wp))
         return dict(res)
 
     def info(self):

@@ -2,7 +2,6 @@ from gzip import GzipFile
 from hashlib import sha1
 from io import BytesIO
 from os.path import isfile, join
-from urllib.parse import quote
 
 import requests
 from warcio.recordloader import ArcWarcRecordLoader
@@ -12,7 +11,6 @@ from wpdxf.utils.utils import compress_file, decompress_file
 
 
 def search_index(url):
-    url = quote(url)
     response = requests.get(
         "https://index.commoncrawl.org/CC-MAIN-2021-43-index",
         params={"url": url, "limit": 1, "output": "json"},
@@ -45,7 +43,6 @@ def get_html(uri):
                 response["filename"], int(response["offset"]), int(response["length"])
             )
         except requests.exceptions.HTTPError as e:
-            print(e)
             return None
         raw_html = warc.content_stream().read()
         clean_html = HTMLParser(raw_html).clean_html
