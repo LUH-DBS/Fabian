@@ -63,7 +63,7 @@ class BasicEvaluator:
 
             except Exception as e:
                 # Catch any etree.ParserError, timeout or other exceptions.
-                logging.exception()
+                logging.exception("Error on parsing " + wp.uri)
                 print(format_exc())
                 resource.remove_webpage(wp)
 
