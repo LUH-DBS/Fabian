@@ -106,6 +106,7 @@ def parse_args():
     parser.add_argument("--num_examples", default=5, type=int)
     parser.add_argument("--num_queries", default=5, type=int)
     parser.add_argument("--tau", default=2, type=int)
+    parser.add_argument("--enrich_predicates", action="store_true")
 
     args = parser.parse_args()
     args.filename = args.benchmark
@@ -123,6 +124,8 @@ def parse_args():
         seed=args.seed,
         num_examples=args.num_examples,
         num_queries=args.num_queries,
+        tau=args.tau,
+        enrich_predicates=args.enrich_predicates
     )
 
     split = split_benchmark(**vars(args))
@@ -130,17 +133,17 @@ def parse_args():
     queries = {*split[1]}
     groundtruth = [*zip(*split[1::2])]
 
-    return args.mode, examples, queries, groundtruth, args.tau
+    return args, examples, queries, groundtruth
 
 
-def main(mode, examples, queries, groundtruth, tau):
+def main(args, examples, queries, groundtruth):
     rw = ReportWriter()
 
-    if mode is ModeArgs.WEBPAGE:
-        source = WebPageSource(tau)
-    elif mode is ModeArgs.WEBTABLE:
-        source = WebTableSource(tau)
-    elif mode is ModeArgs.FLASHEXTRACT:
+    if args.mode is ModeArgs.WEBPAGE:
+        source = WebPageSource(args.tau, args.enrich_predicates)
+    elif args.mode is ModeArgs.WEBTABLE:
+        source = WebTableSource(args.tau)
+    elif args.mode is ModeArgs.FLASHEXTRACT:
         source = ...
     else:
         return

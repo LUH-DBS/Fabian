@@ -115,12 +115,12 @@ class WebTableSource(Source):
 
 
 class WebPageSource(Source):
-    def __init__(self, tau: int = 2) -> None:
+    def __init__(self, tau: int = 2, enrich_predicates: bool = True) -> None:
         super().__init__(tau)
         self.query_executor = QueryExecutor()
         self.evaluation = BasicEvaluator()
         self.reduction = NielandtReducer()
-        self.induction = NielandtInduction()
+        self.induction = NielandtInduction(enrich_predicates=enrich_predicates)
 
     def prepare_input(
         self,

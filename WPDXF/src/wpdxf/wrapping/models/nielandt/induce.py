@@ -9,6 +9,9 @@ from wpdxf.wrapping.objects.xpath.path import XPath, subtree_root
 
 
 class NielandtInduction:
+    def __init__(self, enrich_predicates: bool = True) -> None:
+        self.enrich_predicates = enrich_predicates
+
     def induce(self, resource: Resource, examples: List[Example] = None):
         node_collection = [
             (subtree_root(start, end), start, end, wp)
@@ -26,18 +29,20 @@ class NielandtInduction:
         end_path = merge(common_roots) + merge(align(end_paths))
 
         common_nodes, start_nodes, end_nodes, _ = zip(*node_collection)
+
         start_prefix = XPath([XPathNode.self_node()])
-        start_prep = preprocess(
-            start_path, [*zip(common_nodes, start_nodes)], prefix=start_prefix,
-        )
-
         end_prefix = XPath([XPathNode(AXISNAMES.DEOS), XPathNode(AXISNAMES.DEOS)])
-        end_prep = preprocess(
-            end_path, [*zip(common_nodes, end_nodes)], prefix=end_prefix,
-        )
 
-        start_path = enrich(start_path, start_prep)
-        end_path = enrich(end_path, end_prep)
+        if self.enrich_predicates:
+            start_prep = preprocess(
+                start_path, [*zip(common_nodes, start_nodes)], prefix=start_prefix,
+            )
+            start_path = enrich(start_path, start_prep)
+
+            end_prep = preprocess(
+                end_path, [*zip(common_nodes, end_nodes)], prefix=end_prefix,
+            )
+            end_path = enrich(end_path, end_prep)
 
         start_path = start_prefix + start_path
         spath, svars = start_path.xpath()
