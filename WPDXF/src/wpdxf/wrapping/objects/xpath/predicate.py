@@ -42,7 +42,7 @@ class AttributePredicate(Predicate):
     def __init__(self, left, comp=None, right=None) -> None:
         left = "@" + left
         if isinstance(right, str):
-            key = "r" + str(abs(hash(right)))
+            key = "r" + str(hash(right))
             variables = {key: right}
             right = "$" + key
         else:

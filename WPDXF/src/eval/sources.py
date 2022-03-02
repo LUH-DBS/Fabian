@@ -5,12 +5,11 @@ from DataXFormer.data.DBUtil import DBUtil
 from DataXFormer.webtableindexer.Tokenizer import Tokenizer
 from DataXFormer.webtables.TableScore import TableScorer
 from DataXFormer.webtables.Transformer import DirectTransformer
-from wpdxf.corpus.parsers.textparser import TextParser
 from wpdxf.db.queryGenerator import QueryExecutor
 from wpdxf.wrapping.models.basic.evaluate import BasicEvaluator
 from wpdxf.wrapping.models.nielandt.induce import NielandtInduction
 from wpdxf.wrapping.models.nielandt.reduce import NielandtReducer
-from wpdxf.wrapping.objects.pairs import Example, Query, tokenized
+from wpdxf.wrapping.objects.pairs import tokenized
 from wpdxf.wrapping.wrapper import wrap
 
 
@@ -36,6 +35,18 @@ class Source:
         return examples, answers, groundtruth
 
     def query_tables(
+        self, examples: Set[Tuple[str, str]], queries: Set[str]
+    ) -> Dict[str, Set[Tuple[str, str]]]:
+        cache_key = tuple(sorted(examples)), tuple(sorted(queries))
+
+        if cache_key in self.cache:
+            result = self.cache[cache_key]
+        else:
+            result = self._query_tables(examples, queries)
+            self.cache[cache_key] = result
+        return result
+
+    def _query_tables(
         self, examples: Set[Tuple[str, str]], queries: Set[str]
     ) -> Dict[str, Set[Tuple[str, str]]]:
         ...
@@ -71,18 +82,6 @@ class WebTableSource(Source):
         groundtruth = set(zip(X, Y))
 
         return examples, queries, groundtruth
-
-    def query_tables(
-        self, examples: Set[Tuple[str, str]], queries: Set[str]
-    ) -> Dict[str, Set[Tuple[str, str]]]:
-        cache_key = tuple(sorted(examples)), tuple(sorted(queries))
-
-        if cache_key in self.cache:
-            result = self.cache[cache_key]
-        else:
-            result = self._query_tables(examples, queries)
-            self.cache[cache_key] = result
-        return result
 
     def _query_tables(
         self, examples: Set[Tuple[str, str]], queries: Set[str]
@@ -137,7 +136,7 @@ class WebPageSource(Source):
 
         return examples, queries, groundtruth
 
-    def query_tables(
+    def _query_tables(
         self, examples: Set[Tuple[str, str]], queries: Set[str]
     ) -> Dict[str, Set[Tuple[str, str]]]:
         tables = wrap(

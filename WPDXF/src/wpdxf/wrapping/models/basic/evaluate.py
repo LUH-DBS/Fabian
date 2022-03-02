@@ -1,3 +1,4 @@
+import logging
 from collections import defaultdict
 from traceback import format_exc
 from typing import Dict, List
@@ -18,12 +19,17 @@ INITIAL_XPATH = "//*[token_equals(string(), $term)]"
 
 @namespace
 def token_equals(context, _string, _other):
-    _string = tp.tokenize_str(_string, ignore_stopwords=False)
-    if not _string:
-        return False
-    _string, _ = zip(*_string)
-    _other, _ = zip(*tp.tokenize_str(_other, ignore_stopwords=False))
-    return _string == _other
+    s_iter = tp.tokenize_str_iter(_string, ignore_stopwords=False)
+    o_iter = tp.tokenize_str_iter(_other, ignore_stopwords=False)
+
+    while True:
+        s_val = next(s_iter, None)
+        o_val = next(o_iter, None)
+
+        if s_val is None and o_val is None:
+            return True
+        if s_val is None or o_val is None or s_val != o_val:
+            return False
 
 
 def xpath(
@@ -57,6 +63,7 @@ class BasicEvaluator:
 
             except Exception as e:
                 # Catch any etree.ParserError, timeout or other exceptions.
+                logging.exception()
                 print(format_exc())
                 resource.remove_webpage(wp)
 

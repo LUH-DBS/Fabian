@@ -4,7 +4,7 @@ import numpy as np
 from wpdxf.wrapping.models.nielandt.utils import (EDIT_ACTIONS, backtrack,
                                                   edit_distance)
 from wpdxf.wrapping.objects.xpath.node import XPathNode
-from wpdxf.wrapping.objects.xpath.path import RelativeXPath, XPath
+from wpdxf.wrapping.objects.xpath.path import XPath
 
 
 def align(xpaths: List[XPath]) -> List[XPath]:

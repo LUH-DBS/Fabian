@@ -96,3 +96,11 @@ class TextParser:
                 token = token[self.max_token_len :]
                 token_idx += 1
         return result
+
+    def tokenize_str_iter(self, text_str: str, ignore_stopwords=True):
+        while True:
+            part, _, text_str = text_str.partition(" ")
+            for token in self.tokenize_str(part, ignore_stopwords):
+                yield token
+            if not text_str:
+                return

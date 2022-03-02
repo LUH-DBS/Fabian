@@ -3,7 +3,7 @@ from typing import Dict, List, Set, Tuple
 
 from wpdxf.corpus.parsers.textparser import TextParser
 from wpdxf.utils.report import ReportWriter
-from wpdxf.wrapping.objects.pairs import Example, Query, tokenized
+from wpdxf.wrapping.objects.pairs import Example, Query
 from wpdxf.wrapping.objects.resource import Resource
 from wpdxf.wrapping.objects.resourceCollector import ResourceCollector
 

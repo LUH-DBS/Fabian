@@ -74,11 +74,9 @@ class ReportWriter(metaclass=Singleton):
     def write_uri_groups(self, groups):
         with open(join(self.rootdir, "groups.txt"), "w+") as f:
             f.write(f"{len(groups)} groups:\n")
-            f.write("\n".join([str(tree) for tree in groups]))
+            f.write("\n".join([str(group) for group in groups]))
 
     def write_answer(self, answer_list, groundtruth, examples):
-        t = Tokenizer()
-
         sm = SequenceMatcher()
         df = DataFrame(columns=["X", "Y", "Y (inp)", "Y (gt)", "Ratio", "Score"])
 
@@ -145,3 +143,12 @@ class ReportWriter(metaclass=Singleton):
             f.write(key + "\n")
             for key, values in table.items():
                 f.write(f"{key}: {values}\n")
+
+    def append_em_scores(self, iteration, answer_scores, table_scores, delta):
+        with open(join(self.rootdir, "em.txt"), "a+") as f:
+            f.write(
+                f"Iteration {iteration}\nDelta: {delta}\nAnswer Scores ({len(answer_scores)}):\n"
+            )
+            [f.write(str(item) + "\n") for item in answer_scores.items()]
+            f.write(f"Table Scores ({len(table_scores)}):\n")
+            [f.write(str(item) + "\n") for item in table_scores.items()]

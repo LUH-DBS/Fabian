@@ -58,8 +58,8 @@ class ResourceCollector:
 
         rw.write_query_result(uritree.to_dict())
 
-        groups, forest = self.group_uritree(uritree)
-        rw.write_uri_groups(forest)
+        groups = self.group_uritree(uritree)
+        rw.write_uri_groups(groups)
 
         return groups
 
@@ -144,14 +144,10 @@ class ResourceCollector:
         """
 
         groups = []
-        # filter_forest is used for visualization, has no other use.
-        filtered_forest = []
         for tree in uritree.root_nodes.values():
             filter_result = tree.decompose(self.tau)
             # filter_result = tree.bfs_filter(_resource_filter)
             groups.extend(filter_result)
-            if filter_result:
-                filtered_forest.append(tree)
             if self.limit > 0 and len(groups) >= self.limit:
                 break
 
@@ -161,4 +157,4 @@ class ResourceCollector:
                 for t in sorted(groups, key=lambda t: -len(t.q_matches))
             ]
 
-        return groups, filtered_forest
+        return groups

@@ -1,4 +1,5 @@
 import argparse
+import logging
 from datetime import datetime
 from enum import Enum
 from os.path import abspath, basename, isfile, join, splitext
@@ -102,8 +103,9 @@ def parse_args():
         help="Indices (int) or headers (str) considered as output.",
     )
     parser.add_argument("--seed", default=0, type=int, help="Random seed")
-    parser.add_argument("--num_examples", default=2, type=int)
-    parser.add_argument("--num_queries", default=8, type=int)
+    parser.add_argument("--num_examples", default=5, type=int)
+    parser.add_argument("--num_queries", default=5, type=int)
+    parser.add_argument("--tau", default=2, type=int)
 
     args = parser.parse_args()
     args.filename = args.benchmark
@@ -128,16 +130,16 @@ def parse_args():
     queries = {*split[1]}
     groundtruth = [*zip(*split[1::2])]
 
-    return args.mode, examples, queries, groundtruth
+    return args.mode, examples, queries, groundtruth, args.tau
 
 
-def main(mode, examples, queries, groundtruth):
+def main(mode, examples, queries, groundtruth, tau):
     rw = ReportWriter()
 
     if mode is ModeArgs.WEBPAGE:
-        source = WebPageSource()
+        source = WebPageSource(tau)
     elif mode is ModeArgs.WEBTABLE:
-        source = WebTableSource()
+        source = WebTableSource(tau)
     elif mode is ModeArgs.FLASHEXTRACT:
         source = ...
     else:
@@ -158,9 +160,8 @@ def main(mode, examples, queries, groundtruth):
 
 
 if __name__ == "__main__":
-    args = parse_args()
-    main(*args)
-    # try:
-    #     main(*args)
-    # except Exception as e:
-    #     logging.exception("")
+    try:
+        args = parse_args()
+        main(*args)
+    except Exception as e:
+        logging.exception("")

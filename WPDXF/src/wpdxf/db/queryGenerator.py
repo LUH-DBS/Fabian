@@ -45,7 +45,7 @@ class QueryExecutor:
 
         def remove_unresolved_pairs():
             for pair in pairs.copy():
-                if pair.tokens() & self.unknown_tokens:
+                if pair.tokens & self.unknown_tokens:
                     pairs.remove(pair)
 
         all_tokens = set.union(*map(lambda x: x.tokens, pairs))

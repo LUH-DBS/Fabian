@@ -3,7 +3,7 @@ from typing import List, Set, Tuple
 
 from lxml.etree import _Element
 from wpdxf.wrapping.objects.xpath.node import AXISNAMES, XPathNode
-from wpdxf.wrapping.objects.xpath.path import RelativeXPath, XPath, nodelist
+from wpdxf.wrapping.objects.xpath.path import XPath, nodelist
 from wpdxf.wrapping.objects.xpath.predicate import (AttributePredicate,
                                                     Predicate)
 
@@ -105,7 +105,6 @@ def _similar_attributes(step, indicated_nodes, overflow_nodes):
             similar_attributes.append((key, value))
         else:
             similar_attributes.append((key, None))
-
     [step.add_attribute(left, right=right) for left, right in similar_attributes]
 
 
@@ -120,7 +119,7 @@ def _node_names(step, indicated_nodes, overflow_nodes):
     indicated_names = set(node.tag for node in indicated_nodes)
     overflow_names = set(node.tag for node in overflow_nodes)
     if not (indicated_names & overflow_names):
-        step.predicates.append([Predicate(f"self::{nt}" for nt in indicated_names)])
+        step.predicates.append([Predicate(f"self::{nt}") for nt in indicated_names])
     else:
         # Integer check
         indicated_int_nodes = list(
@@ -152,7 +151,8 @@ def _close_neighbours(step, indicated_nodes, overflow_nodes):
     def _collect(nodes: List[_Element], path: XPath):
         text_dict = None
         for node in nodes:
-            neighbours = node.xpath(str(path))
+            xpath, xvars = path.xpath()
+            neighbours = node.xpath(xpath, **xvars)
             if text_dict is None:
                 text_dict = {
                     text: set([(n.tag, i + 1)])
@@ -245,11 +245,11 @@ def _neighbourhood_search(step, indicated_nodes, overflow_nodes):
 
 
 __ENRICHMENT_FUNC__ = (
-    _preceding_sibling,
     _similar_attributes,
     _node_names,
     _common_prefixes,
+    _close_neighbours,
 )
-# _close_neighbours not finished!
+# _preceding_siblings not used
 # _neighbourhood search not implemented
 

@@ -2,6 +2,7 @@ from copy import deepcopy
 from typing import Dict, List, Set, Tuple
 
 import numpy as np
+from wpdxf.utils.report import ReportWriter
 
 from eval.sources import Source
 
@@ -102,6 +103,7 @@ class TableScorer:
     def expectation_maximization(
         self, examples: Set[Tuple[str, str]], queries: Set[str],
     ):
+        rw = ReportWriter()
         iter = 0
 
         inp_vals = set(map(lambda ex: ex[0], examples)) | queries
@@ -142,10 +144,9 @@ class TableScorer:
                     old_score = old_answers.get(inp, {}).get(out, 0.0)
                     delta_score += abs(score - old_score)
 
-            print("Iteration:", iter)
-            print("Answer scores:", self.answer_scores)
-            print("Table scores:", self.table_scores)
-            print("Delta", delta_score)
+            rw.append_em_scores(
+                iter, self.answer_scores, self.table_scores, delta_score
+            )
 
             if (
                 finishedQuerying and delta_score < self.epsilon
@@ -156,6 +157,7 @@ class TableScorer:
             iter += 1
 
         return self.answer_scores
+
 
 # if __name__ == "__main__":
 #     from eval.sources import WebTableSource, WebPageSource
