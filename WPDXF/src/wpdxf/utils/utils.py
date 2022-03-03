@@ -22,6 +22,8 @@ def compress_file(filepath: str, content: Union[str, bytes, BytesIO]):
 
 
 def decompress_file(filepath: str, asStr: bool = True):
+    if not os.path.exists(filepath):
+        return ""
     with gzip.open(filepath) as f:
         content = f.read()
 

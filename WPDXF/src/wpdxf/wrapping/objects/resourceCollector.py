@@ -1,16 +1,19 @@
+import os
 from collections import defaultdict
-from typing import Counter, Dict, Iterator, List, Set, Tuple
+from hashlib import sha1
+from typing import Counter, Dict, List, Set, Tuple
 
 from wpdxf.db.queryGenerator import QueryExecutor
 from wpdxf.utils.report import ReportWriter
 from wpdxf.utils.settings import Settings
-from wpdxf.utils.utils import read_json, write_json
+from wpdxf.utils.utils import compress_file, decompress_file
 from wpdxf.wrapping.objects.pairs import Example, Pair, Query
 from wpdxf.wrapping.objects.uritree import URITree
 
 
 def pair_to_cache_key(p: Pair):
-    return (p.inp, "") if isinstance(p, Query) else p.pair
+    k0, k1 = (p.inp, "") if isinstance(p, Query) else p.pair
+    return f"{sha1(k0.encode()).hexdigest()}_{sha1(k1.encode()).hexdigest()}"
 
 
 def cache_key_to_pair(k: Tuple[str, str]):
@@ -24,11 +27,7 @@ class ResourceCollector:
         self.limit = limit
 
         self.cache_path = Settings().URL_CACHE
-        self.values_in_cache = {
-            (inp, out)
-            for inp, outs in read_json(self.cache_path).items()
-            for out in outs
-        }
+        _, _, self.values_in_cache = next(os.walk(self.cache_path), ([], [], []))
 
     def collect(self, examples, queries):
         def _collect(pairs):
@@ -48,7 +47,8 @@ class ResourceCollector:
 
         url_dict = _collect(examples)
         for uri, examples in url_dict.items():
-            uritree.add_uri(uri, examples, {})
+            if examples:
+                uritree.add_uri(uri, examples, {})
 
         uritree.reduce(self.tau)
 
@@ -64,24 +64,22 @@ class ResourceCollector:
         return groups
 
     def collect_from_cache(self, pairs: List[Pair], url_dict: defaultdict):
-        cache = read_json(self.cache_path)
-
         for pair in pairs:
-            inp, out = pair_to_cache_key(pair)
-            for url in cache[inp][out]:
+            key = pair_to_cache_key(pair)
+            cachefile = os.path.join(self.cache_path, key)
+            content = decompress_file(cachefile)
+            for url in content.split("\n")[:-1]:
                 url_dict[url].add(pair)
 
     def store_to_cache(self, url_dict: dict):
-        cache = read_json(self.cache_path)
         for url, pairs in url_dict.items():
             for pair in pairs:
-                inp, out = pair_to_cache_key(pair)
-                cache.setdefault(inp, {}).setdefault(out, []).append(url)
+                key = pair_to_cache_key(pair)
+                cachefile = os.path.join(self.cache_path, key)
+                content = decompress_file(cachefile)
+                compress_file(cachefile, content + url + "\n")
 
-        self.values_in_cache = {
-            (inp, out) for inp, outs in cache.items() for out in outs
-        }
-        write_json(self.cache_path, cache)
+            self.values_in_cache.append(key)
 
     def collect_from_corpus(
         self, pairs: List[Pair], url_dict: defaultdict
@@ -118,8 +116,7 @@ class ResourceCollector:
                         # c == 2 is only possible if pair is an Example,
                         # c > 2 is not possible
                         matches.add(pair)
-                if matches:
-                    url_dict[uri] = matches
+                url_dict[uri] = matches
 
     def _create_masks(self, pairs: List[Pair], token_dict: Dict[str, int]) -> Dict:
         masks = {}
