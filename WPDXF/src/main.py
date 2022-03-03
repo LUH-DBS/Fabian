@@ -152,7 +152,7 @@ def main(args, examples, queries, groundtruth):
 
     scorer = TableScorer(source)
     with rw.start_timer("Expectation Maximization"):
-        print(examples, queries, sep="\n")
+        #print(examples, queries, sep="\n")
         examples, queries, groundtruth = source.prepare_input(
             examples, queries, groundtruth
         )
