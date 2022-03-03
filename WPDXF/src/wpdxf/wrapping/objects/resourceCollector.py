@@ -102,6 +102,8 @@ class ResourceCollector:
                 uri_matches = set()
                 for i in range(max(len(partition) - min_size + 1, 0)):
                     window = partition[i : i + max_size]
+                    if not window:
+                        continue
                     offset = window[0][1]
                     window = tuple((tid, pos - offset) for tid, pos in window)
                     for key, mask in masks.items():

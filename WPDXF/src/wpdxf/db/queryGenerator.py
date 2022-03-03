@@ -52,7 +52,7 @@ class QueryExecutor:
         self.update_token_dict(all_tokens)
         if self.unknown_tokens:
             remove_unresolved_pairs()
-            all_tokens = set.union(*map(lambda x: x.tokens, pairs))
+            all_tokens = set.union(*map(lambda x: x.tokens, pairs)) if pairs else set()
 
         return self.query_single_token_set(all_tokens)
 

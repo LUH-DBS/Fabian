@@ -14,7 +14,11 @@ namespace = etree.FunctionNamespace(None)
 tp = TextParser()
 
 ABS_PATH_VAR = "$abs_start_path"
-INITIAL_XPATH = "//*[token_equals(string(), $term)]"
+
+PREPARED_XPATHS = {
+    "eq": "//*[token_equals(string(), $term)]",
+    "cn": "//*[token_contains(text(), $term)]",
+}
 
 
 @namespace
@@ -32,33 +36,57 @@ def token_equals(context, _string, _other):
             return False
 
 
+@namespace
+def token_contains(context, _string, _other):
+    o_tokens = tp.tokenize_str(_other, ignore_stopwords=False)
+    if o_tokens:
+        o_tokens, _ = zip(*o_tokens)
+    else:
+        return True
+
+    for text in _string:
+        tokens = tp.tokenize_str(text, ignore_stopwords=False)
+        if not tokens or len(tokens) > len(o_tokens):
+            return False
+        else:
+            tokens, _ = zip(*tokens)
+        if any(
+            tokens[i : i + len(o_tokens)] == o_tokens
+            for i in range(len(tokens) - len(o_tokens) + 1)
+        ):
+            return True
+    return False
+
+
 def xpath(
     query: str, query_vars: dict, element: etree._Element, path: str = None, **kwargs
-) -> etree.XPath:
-    query = query or INITIAL_XPATH
+) -> list:
     path = path or ""
     query = query.replace(ABS_PATH_VAR, path)
     try:
         _xpath = etree.XPath(
             query, namespaces={"re": "http://exslt.org/regular-expressions"}
         )
-        return _xpath(element, **query_vars, **kwargs)
+        out = _xpath(element, **query_vars, **kwargs)
+        return out
     except etree.Error as e:
-        print(query)
-        print(query_vars)
-        print(format_exc())
+        logging.exception(f"XPATH Exception for: {query}, {query_vars}")
         return []
 
 
 class BasicEvaluator:
+    def __init__(self, input_xpath: str = None, output_xpath: str = None) -> None:
+        self.input_xpath = input_xpath or PREPARED_XPATHS[1]
+        self.output_xpath = output_xpath or PREPARED_XPATHS[0]
+
     def evaluate_initial(
         self, resource: Resource, examples: List[Example], queries: List[Query] = None,
     ):
         for wp in resource.webpages.copy():
             try:
-                example_inputs = self._evaluate_initial(wp, examples)
-                example_outputs = self._evaluate_pairs(resource, example_inputs)
+                example_outputs = self.evaluate_wp(wp, self.output_xpath, {}, examples)
                 for (pair, inp), outs in example_outputs.items():
+
                     [wp.add_example(pair, inp, out) for out in outs]
 
             except Exception as e:
@@ -70,31 +98,34 @@ class BasicEvaluator:
     def evaluate(self, resource: Resource, examples, queries):
         result = defaultdict(list)
         queries += [Query(ex.inp) for ex in examples]
+        xpath, xvars = resource._xpath, resource._vars
 
         for wp in resource.webpages.copy():
-            query_outputs = self.evaluate_wp(wp, resource, queries)
+            query_outputs = self.evaluate_wp(wp, xpath, xvars, queries)
             for (pair, inp), outs in query_outputs.items():
                 for out in outs:
                     result[pair].append((inp, out))
 
         return result
 
-    def evaluate_wp(self, wp: WebPage, resource: Resource, queries):
-
+    def evaluate_wp(self, wp: WebPage, xpath: str, xvars: dict, queries):
         query_inputs = self._evaluate_initial(wp, queries)
-        return self._evaluate_pairs(resource, query_inputs)
+        return self._evaluate_pairs(xpath, xvars, query_inputs)
 
     def _evaluate_initial(
         self, wp: WebPage, pairs: List[Pair]
     ) -> Dict[Pair, List[etree._Element]]:
         tree = etree.HTML(wp.html)
         return {
-            pair: xpath(INITIAL_XPATH, {}, tree, term=regex.escape(pair.inp))
+            pair: xpath(self.input_xpath, {}, tree, term=regex.escape(pair.inp))
             for pair in pairs
         }
 
     def _evaluate_pairs(
-        self, resource: Resource, pair_inputs: Dict[Pair, List[etree._Element]],
+        self,
+        xpath_str: str,
+        xvars: dict,
+        pair_inputs: Dict[Pair, List[etree._Element]],
     ) -> dict:
         result = defaultdict(list)
         for pair, elements in pair_inputs.items():
@@ -104,9 +135,7 @@ class BasicEvaluator:
                     term = regex.escape(pair.out)
                 else:
                     term = None
-                eval_out = xpath(
-                    resource._xpath, resource._vars, inp, path=inp_path, term=term,
-                )
+                eval_out = xpath(xpath_str, xvars, inp, path=inp_path, term=term,)
                 if eval_out:
                     result[pair, inp] = eval_out
         return dict(result)

@@ -107,6 +107,7 @@ def parse_args():
     parser.add_argument("--num_queries", default=5, type=int)
     parser.add_argument("--tau", default=2, type=int)
     parser.add_argument("--enrich_predicates", action="store_true")
+    parser.add_argument("-tm","--token_match", choices=["eq", "cn"], default="cn")
 
     args = parser.parse_args()
     args.filename = args.benchmark
@@ -140,7 +141,7 @@ def main(args, examples, queries, groundtruth):
     rw = ReportWriter()
 
     if args.mode is ModeArgs.WEBPAGE:
-        source = WebPageSource(args.tau, args.enrich_predicates)
+        source = WebPageSource(args.tau, args.enrich_predicates, args.tm)
     elif args.mode is ModeArgs.WEBTABLE:
         source = WebTableSource(args.tau)
     elif args.mode is ModeArgs.FLASHEXTRACT:

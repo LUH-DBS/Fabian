@@ -6,7 +6,8 @@ from DataXFormer.webtableindexer.Tokenizer import Tokenizer
 from DataXFormer.webtables.TableScore import TableScorer
 from DataXFormer.webtables.Transformer import DirectTransformer
 from wpdxf.db.queryGenerator import QueryExecutor
-from wpdxf.wrapping.models.basic.evaluate import BasicEvaluator
+from wpdxf.wrapping.models.basic.evaluate import (PREPARED_XPATHS,
+                                                  BasicEvaluator)
 from wpdxf.wrapping.models.nielandt.induce import NielandtInduction
 from wpdxf.wrapping.models.nielandt.reduce import NielandtReducer
 from wpdxf.wrapping.objects.pairs import tokenized
@@ -115,10 +116,12 @@ class WebTableSource(Source):
 
 
 class WebPageSource(Source):
-    def __init__(self, tau: int = 2, enrich_predicates: bool = True) -> None:
+    def __init__(
+        self, tau: int = 2, enrich_predicates: bool = True, token_match: str = "eq"
+    ) -> None:
         super().__init__(tau)
         self.query_executor = QueryExecutor()
-        self.evaluation = BasicEvaluator()
+        self.evaluation = BasicEvaluator(PREPARED_XPATHS.get(token_match, "eq"))
         self.reduction = NielandtReducer()
         self.induction = NielandtInduction(enrich_predicates=enrich_predicates)
 
