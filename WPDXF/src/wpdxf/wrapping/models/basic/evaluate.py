@@ -76,8 +76,8 @@ def xpath(
 
 class BasicEvaluator:
     def __init__(self, input_xpath: str = None, output_xpath: str = None) -> None:
-        self.input_xpath = input_xpath or PREPARED_XPATHS[1]
-        self.output_xpath = output_xpath or PREPARED_XPATHS[0]
+        self.input_xpath = input_xpath or PREPARED_XPATHS["cn"]
+        self.output_xpath = output_xpath or PREPARED_XPATHS["eq"]
 
     def evaluate_initial(
         self, resource: Resource, examples: List[Example], queries: List[Query] = None,
@@ -97,11 +97,11 @@ class BasicEvaluator:
 
     def evaluate(self, resource: Resource, examples, queries):
         result = defaultdict(list)
-        queries += [Query(ex.inp) for ex in examples]
+        pairs = queries + [Query(ex.inp) for ex in examples]
         xpath, xvars = resource._xpath, resource._vars
 
         for wp in resource.webpages.copy():
-            query_outputs = self.evaluate_wp(wp, xpath, xvars, queries)
+            query_outputs = self.evaluate_wp(wp, xpath, xvars, pairs)
             for (pair, inp), outs in query_outputs.items():
                 for out in outs:
                     result[pair].append((inp, out))

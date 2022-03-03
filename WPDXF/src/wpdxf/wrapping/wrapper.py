@@ -1,6 +1,7 @@
 from itertools import count
 from typing import Dict, List, Set, Tuple
 
+from lxml.etree import _ElementUnicodeResult
 from wpdxf.corpus.parsers.textparser import TextParser
 from wpdxf.utils.report import ReportWriter
 from wpdxf.wrapping.objects.pairs import Example, Query
@@ -86,7 +87,7 @@ def wrap(examples, queries, query_executor, tau, evaluator, reducer, induction):
 
 
 def create_table(
-    eval_result: Resource, examples: List[Example], queries: List[Query]
+    eval_result: dict, examples: List[Example], queries: List[Query]
 ) -> Dict[str, Set[str]]:
     res = {}
     tp = TextParser()
@@ -94,7 +95,11 @@ def create_table(
     for pair, items in eval_result.items():
         vals = set()
         for _, out in items:
-            tokens = tp.tokenize_str("".join(out.itertext()), ignore_stopwords=False)
+            if isinstance(out, _ElementUnicodeResult):
+                string = str(out)
+            else:
+                string = "".join(out.itertext())
+            tokens = tp.tokenize_str(string, ignore_stopwords=False)
             if not tokens:
                 continue
             tokens, _ = zip(*tokens)
@@ -102,27 +107,6 @@ def create_table(
         res[pair.inp] = vals
 
     return res
-
-    # def _collect(item_dict: dict, items: list):
-    #     for pair in items:
-    #         if not pair in item_dict:
-    #             res[pair.inp] = set()
-    #         else:
-    #             vals = set()
-    #             for _, out, _ in item_dict[pair]:
-    #                 tokens = tp.tokenize_str(
-    #                     "".join(out.itertext()), ignore_stopwords=False
-    #                 )
-    #                 if not tokens:
-    #                     continue
-    #                 tokens, _ = zip(*tokens)
-    #                 vals.add(" ".join(tokens))
-    #             res[pair.inp] = vals
-
-    # _collect(resource.examples(), examples)
-    # _collect(resource.queries(), queries)
-
-    # return res
 
 
 def reduce_table(table: Dict[str, Set[str]]) -> List[Tuple[str, str]]:

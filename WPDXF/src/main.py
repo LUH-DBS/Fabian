@@ -32,19 +32,19 @@ def select_cols(idx_or_header, data):
 
 
 def split_benchmark(
+    *,
     benchmark: DataFrame,
     input: List[int or str],
     output: List[int or str],
     num_examples: int,
-    num_queries: int,
+    # num_queries: int,
     seed: int,
-    *args,
     **kwargs,
 ):
-    if num_examples + num_queries > len(benchmark):
+    if num_examples > len(benchmark):
         raise ValueError("Benchmark contains too few values for evaluation.")
 
-    data = benchmark.sample(num_examples + num_queries, random_state=seed)
+    data = benchmark.sample(frac=1, random_state=seed)
     data_inp = select_cols(input, data)
     data_out = select_cols(output, data)
 
@@ -104,10 +104,10 @@ def parse_args():
     )
     parser.add_argument("--seed", default=0, type=int, help="Random seed")
     parser.add_argument("--num_examples", default=5, type=int)
-    parser.add_argument("--num_queries", default=5, type=int)
+    # parser.add_argument("--num_queries", default=5, type=int)
     parser.add_argument("--tau", default=2, type=int)
     parser.add_argument("--enrich_predicates", action="store_true")
-    parser.add_argument("-tm","--token_match", choices=["eq", "cn"], default="cn")
+    parser.add_argument("-tm", "--token_match", choices=["eq", "cn"], default="cn")
 
     args = parser.parse_args()
     args.filename = args.benchmark
@@ -124,9 +124,10 @@ def parse_args():
         outputCols=args.output,
         seed=args.seed,
         num_examples=args.num_examples,
-        num_queries=args.num_queries,
+        # num_queries=args.num_queries,
         tau=args.tau,
-        enrich_predicates=args.enrich_predicates
+        enrich_predicates=args.enrich_predicates,
+        token_match=args.token_match,
     )
 
     split = split_benchmark(**vars(args))
@@ -141,7 +142,7 @@ def main(args, examples, queries, groundtruth):
     rw = ReportWriter()
 
     if args.mode is ModeArgs.WEBPAGE:
-        source = WebPageSource(args.tau, args.enrich_predicates, args.tm)
+        source = WebPageSource(args.tau, args.enrich_predicates, args.token_match)
     elif args.mode is ModeArgs.WEBTABLE:
         source = WebTableSource(args.tau)
     elif args.mode is ModeArgs.FLASHEXTRACT:

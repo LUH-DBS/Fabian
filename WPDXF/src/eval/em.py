@@ -57,7 +57,8 @@ class TableScorer:
             for inp, out in table:
                 uncovered_X.remove(inp)
 
-                score = self.answer_scores[inp][out]
+                # Examples with different answers are not covered in answer_scores
+                score = self.answer_scores[inp].get(out, 0)
                 if is_max(score, inp, self.answer_scores):
                     good += score
                 else:
