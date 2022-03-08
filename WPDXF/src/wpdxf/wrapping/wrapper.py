@@ -21,7 +21,6 @@ def wrap(examples, queries, query_executor, tau, evaluator, reducer, induction):
     print("Collecting Resources")
     resources = ResourceCollector(query_executor, tau).collect(examples, queries)
     print(f"Resulted in {len(resources)} resources")
-
     tables = {}
     rw.start_timer("Full Evaluation")
     for i, _resource in enumerate(resources):
@@ -60,7 +59,7 @@ def wrap(examples, queries, query_executor, tau, evaluator, reducer, induction):
                 eval_result = evaluator.evaluate(resource, examples, queries)
 
             table = create_table(eval_result, examples, queries)
-            rw.append_query_evaluation(f"{iteration} - {resource.identifier}", table)
+            rw.append_query_evaluation(f"{iteration} - {resource.identifier}\n{resource._xpath}\n{resource._vars}", table)
 
             table = reduce_table(table)
             if len([*filter(lambda x: x[1] is not None, table)]) >= tau:

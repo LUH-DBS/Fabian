@@ -116,10 +116,14 @@ class WebTableSource(Source):
 
 class WebPageSource(Source):
     def __init__(
-        self, tau: int = 2, enrich_predicates: bool = True, token_match: str = "eq"
+        self,
+        tau: int = 2,
+        enrich_predicates: bool = True,
+        token_match: str = "eq",
+        max_rel_tf: float = 0.01,
     ) -> None:
         super().__init__(tau)
-        self.query_executor = QueryExecutor()
+        self.query_executor = QueryExecutor(max_rel_tf=max_rel_tf)
         self.evaluation = BasicEvaluator(
             output_xpath=PREPARED_XPATHS.get(token_match, "eq")
         )

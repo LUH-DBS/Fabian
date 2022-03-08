@@ -32,6 +32,7 @@ class Settings:
             "NUM_CONSUMER",
             "UPDATE_STATS_EACH",
             "MAX_TOKEN_LEN",
+            "MAX_CORPUS_FREQ",
         ]
     )
 

@@ -42,7 +42,9 @@ class Pair:
 
     def __post_init__(self, tp):
         object.__setattr__(self, "tok_inp", self.tp.tokenize_str(self.inp))
-        object.__setattr__(self, "tok_out", self.tp.tokenize_str(self.out))
+        object.__setattr__(
+            self, "tok_out", [] if self.out is None else self.tp.tokenize_str(self.out)
+        )
         object.__setattr__(
             self, "tokens", set(t for t, _ in self.tok_inp + self.tok_out)
         )

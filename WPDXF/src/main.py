@@ -1,15 +1,16 @@
 import argparse
 import logging
+import os
 from datetime import datetime
 from enum import Enum
-from os.path import abspath, basename, isfile, join, splitext
+from os.path import abspath, basename, exists, isfile, join, splitext
 from typing import List
 
 from pandas import DataFrame, read_csv
 
 from eval.em import TableScorer
 from eval.sources import WebPageSource, WebTableSource
-from wpdxf.utils.report import ReportWriter
+from wpdxf.utils.report import ReportWriter, Singleton
 
 BENCHMARKS = "../data/benchmarks/"
 
@@ -57,25 +58,30 @@ def split_benchmark(
     return ex_X, q_X, ex_Y, q_Y
 
 
-def parse_args():
-    filename = []
-
-    def dataframe(file):
-        # Search for valid path
-        # Input is a valid path itself.
-        if isfile(file):
-            filepath = file
-        # Input is a valid path relative to the default benchmark dir.
-        elif isfile(join(BENCHMARKS, file)):
-            filepath = join(BENCHMARKS, file)
+def parse_benchmarks(path) -> List[str]:
+    def parse_file_or_dir(p):
+        if isfile(p):
+            return [p]
         else:
-            raise FileNotFoundError
-        filepath = abspath(filepath)
-        filename.append(filepath)
-        return read_csv(filepath, encoding="utf-8", encoding_errors="strict").astype(
-            str
-        )
+            root, _, files = next(os.walk(p))
+            files = list(
+                map(
+                    lambda f: join(root, f),
+                    filter(lambda f: splitext(f)[1] == ".csv", files),
+                )
+            )
+            return files
 
+    # Search for valid path
+    if exists(path):
+        return parse_file_or_dir(path)
+    elif exists(join(BENCHMARKS, path)):
+        return parse_file_or_dir(join(BENCHMARKS, path))
+    else:
+        raise FileNotFoundError
+
+
+def parse_args():
     parser = argparse.ArgumentParser(description="")
     # Evaluation mode
     choices = [m.value for m in ModeArgs]
@@ -108,41 +114,47 @@ def parse_args():
     parser.add_argument("--tau", default=2, type=int)
     parser.add_argument("--enrich_predicates", action="store_true")
     parser.add_argument("-tm", "--token_match", choices=["eq", "cn"], default="cn")
+    parser.add_argument("-tf", "--max_rel_tf", default=0.01, type=float)
 
     args = parser.parse_args()
-    args.filename = args.benchmark
-    args.benchmark = dataframe(args.benchmark)
 
-    filename_short = splitext(basename(args.filename))[0]
+    # Check if benchmark is file or folder
+    filenames = parse_benchmarks(args.benchmark)
+
+    return filenames, args
+
+
+def run_single_experiment(filename, args):
+    filename_short = splitext(basename(filename))[0]
     rw = ReportWriter(f"{args.mode}-{filename_short}")
 
-    rw.write_metafile(
-        filename=filename[0],
-        date=datetime.now().isoformat(timespec="seconds"),
-        mode=args.mode,
-        inputCols=args.input,
-        outputCols=args.output,
-        seed=args.seed,
-        num_examples=args.num_examples,
-        # num_queries=args.num_queries,
-        tau=args.tau,
-        enrich_predicates=args.enrich_predicates,
-        token_match=args.token_match,
+    benchmark = read_csv(filename, encoding="utf-8", encoding_errors="strict").astype(
+        str
     )
-
-    split = split_benchmark(**vars(args))
+    split = split_benchmark(
+        benchmark=benchmark,
+        input=args.input,
+        output=args.output,
+        num_examples=args.num_examples,
+        seed=args.seed,
+    )
     examples = [*zip(*split[::2])]
     queries = {*split[1]}
     groundtruth = [*zip(*split[1::2])]
 
-    return args, examples, queries, groundtruth
-
-
-def main(args, examples, queries, groundtruth):
-    rw = ReportWriter()
+    rw.write_metafile(
+        filename=filename,
+        date=datetime.now().isoformat(timespec="seconds"),
+        examples=examples,
+        queries=queries,
+        groundtruth=groundtruth,
+        **vars(args),
+    )
 
     if args.mode is ModeArgs.WEBPAGE:
-        source = WebPageSource(args.tau, args.enrich_predicates, args.token_match)
+        source = WebPageSource(
+            args.tau, args.enrich_predicates, args.token_match, args.max_rel_tf
+        )
     elif args.mode is ModeArgs.WEBTABLE:
         source = WebTableSource(args.tau)
     elif args.mode is ModeArgs.FLASHEXTRACT:
@@ -152,7 +164,7 @@ def main(args, examples, queries, groundtruth):
 
     scorer = TableScorer(source)
     with rw.start_timer("Expectation Maximization"):
-        #print(examples, queries, sep="\n")
+        # print(examples, queries, sep="\n")
         examples, queries, groundtruth = source.prepare_input(
             examples, queries, groundtruth
         )
@@ -165,8 +177,10 @@ def main(args, examples, queries, groundtruth):
 
 
 if __name__ == "__main__":
-    try:
-        args = parse_args()
-        main(*args)
-    except Exception as e:
-        logging.exception("")
+    filenames, args = parse_args()
+    for filename in filenames:
+        try:
+            run_single_experiment(filename, args)
+        except Exception:
+            logging.exception(f"Exception with {filename}")
+        Singleton._instances = {}

@@ -1,7 +1,7 @@
 import os
 from collections import defaultdict
 from hashlib import sha1
-from typing import Counter, Dict, List, Set, Tuple
+from typing import Dict, List, Set, Tuple
 
 from wpdxf.db.queryGenerator import QueryExecutor
 from wpdxf.utils.report import ReportWriter
@@ -27,7 +27,8 @@ class ResourceCollector:
         self.limit = limit
 
         self.cache_path = Settings().URL_CACHE
-        _, _, self.values_in_cache = next(os.walk(self.cache_path), ([], [], []))
+        _, _, values_in_cache = next(os.walk(self.cache_path), (None, None, set()))
+        self.values_in_cache = set(values_in_cache)
 
     def collect(self, examples, queries):
         def _collect(pairs):
@@ -72,14 +73,21 @@ class ResourceCollector:
                 url_dict[url].add(pair)
 
     def store_to_cache(self, url_dict: dict):
+        cache_dict = defaultdict(list)
         for url, pairs in url_dict.items():
             for pair in pairs:
-                key = pair_to_cache_key(pair)
-                cachefile = os.path.join(self.cache_path, key)
-                content = decompress_file(cachefile)
-                compress_file(cachefile, content + url + "\n")
+                cache_dict[pair].append(url)
+        for pair, urls in cache_dict.items():
+            self._store_to_cache(pair, urls)
 
-            self.values_in_cache.append(key)
+    def _store_to_cache(self, pair: Pair, urls: List[str]):
+        key = pair_to_cache_key(pair)
+        cachefile = os.path.join(self.cache_path, key)
+        content = decompress_file(cachefile)
+        content += "\n".join(urls) + "\n"
+        compress_file(cachefile, content)
+
+        self.values_in_cache.add(key)
 
     def collect_from_corpus(
         self, pairs: List[Pair], url_dict: defaultdict
@@ -89,34 +97,8 @@ class ResourceCollector:
 
         rw = ReportWriter()
         with rw.start_timer("DB Request"):
-            partition_iter = self.query_executor.query_pairs(pairs)
-
-        masks = self._create_masks(pairs, self.query_executor.token_dict)
-        max_size = max(len(mask) for mask in masks.values())
-        min_size = min(len(mask) for mask in masks.values())
-
-        with rw.start_timer("Partition Iteration"):
-            for uri, partition in partition_iter:
-                uri_matches = set()
-                for i in range(max(len(partition) - min_size + 1, 0)):
-                    window = partition[i : i + max_size]
-                    if not window:
-                        continue
-                    offset = window[0][1]
-                    window = tuple((tid, pos - offset) for tid, pos in window)
-                    for key, mask in masks.items():
-                        if window[: len(mask)] == mask:
-                            uri_matches.add(key)
-                counter = Counter(map(lambda key: key[0], uri_matches))
-                matches = set()
-                for pair, c in counter.most_common():
-                    if c == 1 and isinstance(pair, Query):
-                        matches.add(pair)
-                    elif c == 2:
-                        # c == 2 is only possible if pair is an Example,
-                        # c > 2 is not possible
-                        matches.add(pair)
-                url_dict[uri] = matches
+            update_dict = self.query_executor.query_pairs(pairs)
+        url_dict.update(update_dict)
 
     def _create_masks(self, pairs: List[Pair], token_dict: Dict[str, int]) -> Dict:
         masks = {}
@@ -155,5 +137,4 @@ class ResourceCollector:
                 (t.path(), [l.uri for l in t.leaves()])
                 for t in sorted(groups, key=lambda t: -len(t.q_matches))
             ]
-
         return groups
