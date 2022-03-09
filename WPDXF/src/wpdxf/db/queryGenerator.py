@@ -1,5 +1,5 @@
-import logging
 from collections import defaultdict
+import logging
 from typing import Dict, List, Set, Tuple
 
 from wpdxf.utils.settings import Settings
@@ -158,4 +158,7 @@ class QueryExecutor:
         masks = self.create_masks(pairs)
 
         stmt, stmt_dict = self.create_query(masks)
+        if not stmt:
+            return {}
+
         return self.filter_query_result(stmt, stmt_dict, pairs, masks)
