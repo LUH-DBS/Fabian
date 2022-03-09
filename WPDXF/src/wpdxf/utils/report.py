@@ -24,13 +24,21 @@ class Singleton(type):
         return cls._instances[cls]
 
 
+def replace_filehandler(filename):
+    log = logging.getLogger()
+    for handler in log.handlers:
+        log.removeHandler(handler)
+    handler = logging.FileHandler(filename)
+    log.addHandler(handler)
+
+
 class ReportWriter(metaclass=Singleton):
     _timer = []
 
     def __init__(self, dirname):
         self.rootdir = self.make_rootdir(dirname)
         self.logfile = join(self.rootdir, "logfile.log")
-        logging.basicConfig(filename=self.logfile, level=logging.INFO)
+        replace_filehandler(self.logfile)
 
     def __enter__(self):
         return self
@@ -120,8 +128,8 @@ class ReportWriter(metaclass=Singleton):
         precision = correct / answered if answered else 0
         recall = answered / total if total else 0
         print(f"Precision: {precision}, Recall: {recall}")
-        logging.info(df)
-        logging.info(f"Precision: {precision}, Recall: {recall}")
+        self.logger.info(df)
+        self.logger.info(f"Precision: {precision}, Recall: {recall}")
 
         df.to_csv(join(self.rootdir, "answer.csv"), index=False)
 

@@ -125,8 +125,6 @@ def parse_args():
 
 
 def run_single_experiment(filename, args):
-    filename_short = splitext(basename(filename))[0]
-    rw = ReportWriter(f"{args.mode}-{filename_short}")
 
     benchmark = read_csv(filename, encoding="utf-8", encoding_errors="strict").astype(
         str
@@ -179,6 +177,8 @@ def run_single_experiment(filename, args):
 if __name__ == "__main__":
     filenames, args = parse_args()
     for filename in filenames:
+        filename_short = splitext(basename(filename))[0]
+        rw = ReportWriter(f"{args.mode}-{filename_short}")
         try:
             run_single_experiment(filename, args)
         except Exception:
