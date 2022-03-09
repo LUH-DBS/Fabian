@@ -30,6 +30,8 @@ def replace_filehandler(filename):
         log.removeHandler(handler)
     handler = logging.FileHandler(filename)
     log.addHandler(handler)
+    log.setLevel(logging.INFO)
+    return log
 
 
 class ReportWriter(metaclass=Singleton):
@@ -38,7 +40,7 @@ class ReportWriter(metaclass=Singleton):
     def __init__(self, dirname):
         self.rootdir = self.make_rootdir(dirname)
         self.logfile = join(self.rootdir, "logfile.log")
-        replace_filehandler(self.logfile)
+        self.logger = replace_filehandler(self.logfile)
 
     def __enter__(self):
         return self
