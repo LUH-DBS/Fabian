@@ -40,7 +40,7 @@ class QueryExecutor:
         if not tokens:
             return set()
         _interval = _tuple_interval(tokens)
-        stmt = f"SELECT token, tokenid, COUNT(1) as cnt FROM (SELECT * FROM tokens WHERE token IN ({_interval})) S JOIN token_uri_mapping USING(tokenid) GROUP BY tokenid, token"
+        stmt = f"SELECT token, tokenid, term_count FROM tokens WHERE token IN ({_interval}) GROUP BY tokenid, token"
         with self.session.execute(stmt, tuple(tokens)) as cur:
             for token, tokenid, cnt in cur:
                 tokens.remove(token)
